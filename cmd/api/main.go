@@ -26,6 +26,7 @@ type config struct {
 		username string
 		password string
 		receiver string
+		tls      string
 	}
 	// cors
 	cors struct {
@@ -51,6 +52,7 @@ func main() {
 	flag.StringVar(&cfg.smtp.username, "smtp-username", "demo-user", "SMTP username")
 	flag.StringVar(&cfg.smtp.password, "smtp-password", "s3cret123", "SMTP password")
 	flag.StringVar(&cfg.smtp.receiver, "smtp-receiver", "jane.doe@example.com", "SMTP receiver")
+	flag.StringVar(&cfg.smtp.tls, "smtp-tls", "opportunistic", "SMTP STARTTLS policy (mandatory|opportunistic|none)")
 
 	flag.Func("cors-trusted-origins", "Trusted CORS origins (space separated)", func(val string) error {
 		cfg.cors.trustedOrigins = strings.Fields(val)
@@ -62,6 +64,11 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	mailer, err := mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.receiver)
+	if err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
+	err = mailer.SetTlsPolicy(cfg.smtp.tls)
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)

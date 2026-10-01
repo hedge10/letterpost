@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"embed"
 	"errors"
+	"fmt"
 	nm "net/mail"
 	"time"
 
@@ -21,10 +22,19 @@ type Mailer struct {
 	receiver string
 }
 
+// tlsPolicies maps the accepted config values to go-mail's STARTTLS policies.
+var tlsPolicies = map[string]mail.TLSPolicy{
+	"mandatory":     mail.TLSMandatory,
+	"opportunistic": mail.TLSOpportunistic,
+	"none":          mail.NoTLS,
+}
+var defaultTlsPolicy = mail.TLSMandatory
+
 func New(host string, port int, username, password, receiver string) (*Mailer, error) {
 	client, err := mail.NewClient(
 		host,
-		mail.WithSMTPAuth(mail.SMTPAuthLoginNoEnc),
+		mail.WithTLSPolicy(defaultTlsPolicy),
+		mail.WithSMTPAuth(mail.SMTPAuthLogin),
 		mail.WithPort(port),
 		mail.WithUsername(username),
 		mail.WithPassword(password),
@@ -44,6 +54,20 @@ func New(host string, port int, username, password, receiver string) (*Mailer, e
 	}
 
 	return mailer, nil
+}
+
+func (m *Mailer) SetTlsPolicy(p string) error {
+	policy, exists := tlsPolicies[p]
+	if !exists {
+		return fmt.Errorf("invalid TLS policy %q (mandatory|opportunistic|none)", policy)
+	}
+
+	m.client.SetTLSPolicy(policy)
+	if policy != mail.TLSMandatory {
+		m.client.SetSMTPAuth(mail.SMTPAuthLoginNoEnc)
+	}
+
+	return nil
 }
 
 func (m *Mailer) Send(sender string, templateFile string, data any) error {

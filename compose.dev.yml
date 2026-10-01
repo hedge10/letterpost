@@ -1,4 +1,14 @@
 services:
+    staticform:
+        build: .
+        ports:
+            - "4000:5000"
+        environment:
+            SF_PORT: 5000
+            SF_SMTP_HOST: mailpit
+            SF_SMTP_PORT: 1025
+            SF_SMTP_RECEIVER: john@example.com
+
     mailpit:
         image: axllent/mailpit
         restart: unless-stopped

@@ -4,6 +4,11 @@ help:
 	@echo 'Usage:'
 	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' | sed -e 's/^/ /'
 
+## build: build the Docker container with the current source
+.PHONY: build
+build:
+	docker compose -f compose.dev.yml up -d --build
+
 ## run: run the cmd/api application
 .PHONY: run
 run:
