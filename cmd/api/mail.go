@@ -15,7 +15,7 @@ func (app *application) sendMail(w http.ResponseWriter, r *http.Request) {
 	fMessagePlain := r.FormValue("plain_body")
 
 	if fSenderAddress == "" {
-		http.Error(w, "Missing param sender", http.StatusBadRequest)
+		app.badRequestResponse(w, r, "missing param sender")
 		return
 	}
 
@@ -25,7 +25,7 @@ func (app *application) sendMail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !mailer.ValidateAddress(sender) {
-		http.Error(w, "Invalid email address or name", http.StatusBadRequest)
+		app.badRequestResponse(w, r, "invalid email address or name")
 		return
 	}
 

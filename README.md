@@ -5,7 +5,7 @@ It can be used with good old static HTML forms or Javascript-based ones.
 
 ## Features
 
-* Handle JSON (`application/json`) and form data (`multipart/form-data`)
+* Handle form data (`multipart/form-data`)
 * IP-based rate limiting
 * Captcha integration:
   * [Cloudflare Turnstile](https://www.cloudflare.com/products/turnstile/)
