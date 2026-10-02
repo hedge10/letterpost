@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"hedge10.staticform/internal/captcha"
 	"hedge10.staticform/internal/mailer"
 )
 
@@ -32,13 +33,21 @@ type config struct {
 	cors struct {
 		trustedOrigins []string
 	}
+	// captcha
+	captcha struct {
+		provider string
+		secret   string
+		sitekey  string
+		enabled  bool
+	}
 }
 
 type application struct {
-	config config
-	logger *slog.Logger
-	mailer *mailer.Mailer
-	wg     sync.WaitGroup
+	config  config
+	logger  *slog.Logger
+	mailer  *mailer.Mailer
+	captcha captcha.Verifier
+	wg      sync.WaitGroup
 }
 
 func main() {
@@ -52,12 +61,21 @@ func main() {
 	flag.StringVar(&cfg.smtp.username, "smtp-username", "demo-user", "SMTP username")
 	flag.StringVar(&cfg.smtp.password, "smtp-password", "s3cret123", "SMTP password")
 	flag.StringVar(&cfg.smtp.receiver, "smtp-receiver", "jane.doe@example.com", "SMTP receiver")
-	flag.StringVar(&cfg.smtp.tls, "smtp-tls", "opportunistic", "SMTP STARTTLS policy (mandatory|opportunistic|none)")
+	flag.StringVar(&cfg.smtp.tls, "smtp-tls", "mandatory", "SMTP STARTTLS policy (mandatory|opportunistic|none)")
 
 	flag.Func("cors-trusted-origins", "Trusted CORS origins (space separated)", func(val string) error {
 		cfg.cors.trustedOrigins = strings.Fields(val)
 		return nil
 	})
+
+	flag.Float64Var(&cfg.limiter.rps, "limiter-rps", 2, "Rate limiter maximum requests per second")
+	flag.IntVar(&cfg.limiter.burst, "limiter-burst", 4, "Rate limiter maximum burst")
+	flag.BoolVar(&cfg.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
+
+	flag.StringVar(&cfg.captcha.provider, "captcha-provider", "", "Captcha provider (cloudflare | friendly-captcha)")
+	flag.StringVar(&cfg.captcha.secret, "captcha-secret", "", "Captcha secret")
+	flag.StringVar(&cfg.captcha.sitekey, "captcha-sitekey", "", "Captcha sitekey (optional)")
+	flag.BoolVar(&cfg.captcha.enabled, "captcha-enabled", false, "Enable captcha support")
 
 	flag.Parse()
 
@@ -78,6 +96,14 @@ func main() {
 		config: cfg,
 		logger: logger,
 		mailer: mailer,
+	}
+
+	if cfg.captcha.enabled {
+		app.captcha, err = captcha.New(captcha.Provider(cfg.captcha.provider), cfg.captcha.secret, cfg.captcha.sitekey)
+		if err != nil {
+			logger.Error(err.Error())
+			os.Exit(1)
+		}
 	}
 
 	err = app.serve()

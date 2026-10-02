@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -8,6 +9,8 @@ import (
 
 	"github.com/tomasen/realip"
 	"golang.org/x/time/rate"
+
+	"hedge10.staticform/internal/captcha"
 )
 
 func (app *application) enableCORS(next http.Handler) http.Handler {
@@ -88,6 +91,33 @@ func (app *application) rateLimit(next http.Handler) http.Handler {
 		}
 
 		mu.Unlock()
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (app *application) requireCaptcha(next http.Handler) http.Handler {
+	if app.captcha == nil {
+		return next
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := r.PostFormValue(app.captcha.FormField())
+		if token == "" {
+			app.captchaFailedResponse(w, r)
+			return
+		}
+
+		err := app.captcha.Verify(r.Context(), token, realip.FromRequest(r))
+		if err != nil {
+			if errors.Is(err, captcha.ErrInvalidToken) {
+				app.captchaFailedResponse(w, r)
+				return
+			}
+
+			app.serverErrorResponse(w, r, err)
+			return
+		}
 
 		next.ServeHTTP(w, r)
 	})

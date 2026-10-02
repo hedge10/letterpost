@@ -12,7 +12,7 @@ build:
 ## run: run the cmd/api application
 .PHONY: run
 run:
-	go run ./cmd/api
+	go run ./cmd/api -smtp-host=localhost -smtp-port=1025 -smtp-tls=none.
 
 ## dispatch-msg: send a test message to the local API
 .PHONY: dispatch-msg

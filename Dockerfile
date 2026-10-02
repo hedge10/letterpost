@@ -19,8 +19,14 @@ ENV SF_PORT=4000 \
     SF_SMTP_PORT=25 \
     SF_SMTP_USERNAME=demo-user \
     SF_SMTP_RECEIVER=jane.doe@example.com \
-    SF_SMTP_TLS=opportunistic \
-    SF_CORS_TRUSTED_ORIGINS=""
+    SF_SMTP_TLS=mandatory \
+    SF_CORS_TRUSTED_ORIGINS="" \
+    SF_LIMITER_ENABLED=true \
+    SF_LIMITER_RPS=2 \
+    SF_LIMITER_BURST=4 \
+    SF_CAPTCHA_ENABLED=false \
+    SF_CAPTCHA_PROVIDER="" \
+    SF_CAPTCHA_SITEKEY=""
 
 ENTRYPOINT ["/bin/sh", "-c", "exec /staticform \
     -port=\"$SF_PORT\" \
@@ -32,4 +38,11 @@ ENTRYPOINT ["/bin/sh", "-c", "exec /staticform \
     -smtp-receiver=\"$SF_SMTP_RECEIVER\" \
     -smtp-tls=\"$SF_SMTP_TLS\" \
     -cors-trusted-origins=\"$SF_CORS_TRUSTED_ORIGINS\" \
+    -limiter-enabled=\"$SF_LIMITER_ENABLED\" \
+    -limiter-rps=\"$SF_LIMITER_RPS\" \
+    -limiter-burst=\"$SF_LIMITER_BURST\" \
+    -captcha-enabled=\"$SF_CAPTCHA_ENABLED\" \
+    -captcha-provider=\"$SF_CAPTCHA_PROVIDER\" \
+    ${SF_CAPTCHA_SECRET:+-captcha-secret=\"$SF_CAPTCHA_SECRET\"} \
+    -captcha-sitekey=\"$SF_CAPTCHA_SITEKEY\" \
     \"$@\"", "--"]

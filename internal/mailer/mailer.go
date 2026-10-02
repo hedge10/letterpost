@@ -59,7 +59,7 @@ func New(host string, port int, username, password, receiver string) (*Mailer, e
 func (m *Mailer) SetTlsPolicy(p string) error {
 	policy, exists := tlsPolicies[p]
 	if !exists {
-		return fmt.Errorf("invalid TLS policy %q (mandatory|opportunistic|none)", policy)
+		return fmt.Errorf("invalid TLS policy %q (mandatory|opportunistic|none)", p)
 	}
 
 	m.client.SetTLSPolicy(policy)

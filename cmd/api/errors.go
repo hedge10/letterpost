@@ -37,6 +37,11 @@ func (app *application) rateLimitExceededResponse(w http.ResponseWriter, r *http
 	app.errorResponse(w, r, http.StatusTooManyRequests, message)
 }
 
+func (app *application) captchaFailedResponse(w http.ResponseWriter, r *http.Request) {
+	message := "captcha verification failed"
+	app.errorResponse(w, r, http.StatusForbidden, message)
+}
+
 func (app *application) notFoundResponse(w http.ResponseWriter, r *http.Request) {
 	message := "the requested resource could not be found"
 	app.errorResponse(w, r, http.StatusNotFound, message)
