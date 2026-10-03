@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	nm "net/mail"
+	"strings"
 	"time"
 
 	ht "html/template"
@@ -115,7 +116,9 @@ func (m *Mailer) Send(sender string, templateFile string, data any) error {
 
 	msg.Subject(subject.String())
 	msg.SetBodyString(mail.TypeTextPlain, plainBody.String())
-	msg.AddAlternativeString(mail.TypeTextHTML, htmlBody.String())
+	if strings.TrimSpace(htmlBody.String()) != "" {
+		msg.AddAlternativeString(mail.TypeTextHTML, htmlBody.String())
+	}
 
 	return m.client.DialAndSend(msg)
 }

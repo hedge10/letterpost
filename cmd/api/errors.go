@@ -32,8 +32,8 @@ func (app *application) serverErrorResponse(w http.ResponseWriter, r *http.Reque
 	app.errorResponse(w, r, http.StatusInternalServerError, message)
 }
 
-func (app *application) badRequestResponse(w http.ResponseWriter, r *http.Request, message string) {
-	app.errorResponse(w, r, http.StatusBadRequest, message)
+func (app *application) failedValidationResponse(w http.ResponseWriter, r *http.Request, err error) {
+	app.errorResponse(w, r, http.StatusUnprocessableEntity, err)
 }
 
 func (app *application) rateLimitExceededResponse(w http.ResponseWriter, r *http.Request) {

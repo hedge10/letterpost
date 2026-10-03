@@ -6,6 +6,7 @@ It can be used with good old static HTML forms or Javascript-based ones.
 ## Features
 
 * Handle form data (`multipart/form-data`)
+* Input validation with sane defaults
 * IP-based rate limiting
 * Captcha integration:
   * [Cloudflare Turnstile](https://www.cloudflare.com/products/turnstile/)
