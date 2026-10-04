@@ -63,9 +63,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	if _, ok := originOf(cfg.RedirectURL); cfg.RedirectURL != "" && !ok {
-		logger.Error("SF_REDIRECT_URL must be an absolute http(s) URL")
-		os.Exit(1)
+	if cfg.RedirectURL != "" {
+		if _, ok := originOf(cfg.RedirectURL); !ok {
+			logger.Error("SF_REDIRECT_URL must be an absolute http(s) URL")
+			os.Exit(1)
+		}
 	}
 
 	mailer, err := mailer.New(cfg.Smtp.Host, cfg.Smtp.Port, cfg.Smtp.Username, cfg.Smtp.Password, cfg.Smtp.Receiver)
