@@ -29,7 +29,7 @@ func TestMessageInputValidate(t *testing.T) {
 		wantField string
 	}{
 		{name: "valid", modify: func(m *messageInput) {}},
-		{name: "subject and html body are optional", modify: func(m *messageInput) { m.Subject = ""; m.HtmlBody = "" }},
+		{name: "subject is optional", modify: func(m *messageInput) { m.Subject = "" }},
 		{name: "missing sender", modify: func(m *messageInput) { m.Sender = "" }, wantField: "sender"},
 		{name: "sender is not an email address", modify: func(m *messageInput) { m.Sender = "not-an-address" }, wantField: "sender"},
 		{name: "sender with name is rejected", modify: func(m *messageInput) { m.Sender = `"Jane" <jane.doe@gmail.com>` }, wantField: "sender"},

@@ -6,10 +6,8 @@ import (
 	"errors"
 	"fmt"
 	nm "net/mail"
-	"strings"
 	"time"
 
-	ht "html/template"
 	tt "text/template"
 
 	"github.com/wneessen/go-mail"
@@ -20,6 +18,7 @@ var templateFS embed.FS
 
 type Mailer struct {
 	client   *mail.Client
+	from     string
 	receiver string
 }
 
@@ -31,7 +30,7 @@ var tlsPolicies = map[string]mail.TLSPolicy{
 }
 var defaultTlsPolicy = mail.TLSMandatory
 
-func New(host string, port int, username, password, receiver string) (*Mailer, error) {
+func New(host string, port int, username, password, from, receiver string) (*Mailer, error) {
 	client, err := mail.NewClient(
 		host,
 		mail.WithTLSPolicy(defaultTlsPolicy),
@@ -45,12 +44,17 @@ func New(host string, port int, username, password, receiver string) (*Mailer, e
 		return nil, err
 	}
 
+	if from == "" || !ValidateAddress(from) {
+		return nil, errors.New("missing or invalid from address")
+	}
+
 	if receiver == "" || !ValidateAddress(receiver) {
 		return nil, errors.New("missing or invalid receiver")
 	}
 
 	mailer := &Mailer{
 		client:   client,
+		from:     from,
 		receiver: receiver,
 	}
 
@@ -71,56 +75,54 @@ func (m *Mailer) SetTlsPolicy(p string) error {
 	return nil
 }
 
-func (m *Mailer) Send(sender string, templateFile string, data any) error {
-	textTmpl, err := tt.New("").ParseFS(templateFS, "templates/"+templateFile)
+// Send mails the rendered template to the receiver. The mail is sent from the
+// configured from address, as SMTP servers reject senders they don't own, and
+// the visitor goes into Reply-To.
+func (m *Mailer) Send(name, replyTo, templateFile string, data any) error {
+	msg, err := m.buildMsg(name, replyTo, templateFile, data)
 	if err != nil {
 		return err
+	}
+
+	return m.client.DialAndSend(msg)
+}
+
+func (m *Mailer) buildMsg(name, replyTo, templateFile string, data any) (*mail.Msg, error) {
+	textTmpl, err := tt.New("").ParseFS(templateFS, "templates/"+templateFile)
+	if err != nil {
+		return nil, err
 	}
 
 	subject := new(bytes.Buffer)
 	err = textTmpl.ExecuteTemplate(subject, "subject", data)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	plainBody := new(bytes.Buffer)
 	err = textTmpl.ExecuteTemplate(plainBody, "plainBody", data)
 	if err != nil {
-		return err
-	}
-
-	htmlTmpl, err := ht.New("").ParseFS(templateFS, "templates/"+templateFile)
-	if err != nil {
-		return err
-	}
-
-	htmlBody := new(bytes.Buffer)
-	err = htmlTmpl.ExecuteTemplate(htmlBody, "htmlBody", data)
-	if err != nil {
-		return err
+		return nil, err
 	}
 
 	msg := mail.NewMsg()
-	err = msg.From(sender)
+	err = msg.FromFormat(name, m.from)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	err = msg.To(m.receiver)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	err = msg.ReplyTo(sender)
+	err = msg.ReplyToFormat(name, replyTo)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	msg.Subject(subject.String())
 	msg.SetBodyString(mail.TypeTextPlain, plainBody.String())
-	if strings.TrimSpace(htmlBody.String()) != "" {
-		msg.AddAlternativeString(mail.TypeTextHTML, htmlBody.String())
-	}
 
-	return m.client.DialAndSend(msg)
+	return msg, nil
 }
 
 func ValidateAddress(e string) bool {

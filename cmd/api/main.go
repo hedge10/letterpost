@@ -26,6 +26,7 @@ type config struct {
 		Port     int    `env:"PORT" envDefault:"25"`
 		Username string `env:"USERNAME"`
 		Password string `env:"PASSWORD"`
+		From     string `env:"FROM,required"`
 		Receiver string `env:"RECEIVER,required"`
 		Tls      string `env:"TLS" envDefault:"mandatory"`
 	} `envPrefix:"SMTP_"`
@@ -70,7 +71,7 @@ func main() {
 		}
 	}
 
-	mailer, err := mailer.New(cfg.Smtp.Host, cfg.Smtp.Port, cfg.Smtp.Username, cfg.Smtp.Password, cfg.Smtp.Receiver)
+	mailer, err := mailer.New(cfg.Smtp.Host, cfg.Smtp.Port, cfg.Smtp.Username, cfg.Smtp.Password, cfg.Smtp.From, cfg.Smtp.Receiver)
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)

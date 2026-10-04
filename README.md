@@ -26,7 +26,8 @@ docker run -d -p 4000:4000 \
   -e SF_SMTP_HOST=smtp.example.com \
   -e SF_SMTP_USERNAME=user \
   -e SF_SMTP_PASSWORD=secret \
-  -e SF_SMTP_RECEIVER=forms@example.com \
+  -e SF_SMTP_FROM=forms@example.com \
+  -e SF_SMTP_RECEIVER=you@example.com \
   ghcr.io/hedge10/staticform:latest
 ```
 
@@ -53,6 +54,7 @@ The configuration can be done entirely via environment variables
 | `SF_SMTP_PORT`            | `25`                       | SMTP server port                                                                              |
 | `SF_SMTP_USERNAME`        | _none_                     | SMTP username                                                                                 |
 | `SF_SMTP_PASSWORD`        | _none_                     | SMTP password                                                                                 |
+| `SF_SMTP_FROM`            | _none_ (**required**)      | Address the mails are sent from, must be owned by the SMTP account. Visitor goes in Reply-To  |
 | `SF_SMTP_RECEIVER`        | _none_ (**required**)      | Email address that receives the form submissions                                              |
 | `SF_SMTP_TLS`             | `mandatory`                | TLS policy for the SMTP connection: `mandatory`, `opportunistic` or `none`                    |
 | `SF_CORS_TRUSTED_ORIGINS` | _none_                     | Space-separated list of origins allowed to send cross-origin requests                         |

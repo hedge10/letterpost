@@ -2,7 +2,6 @@ package main
 
 import (
 	"net/http"
-	"net/mail"
 	"regexp"
 
 	validation "github.com/go-ozzo/ozzo-validation/v4"
@@ -14,7 +13,6 @@ type messageInput struct {
 	// Email address of the sender
 	Sender    string `json:"sender"`
 	Subject   string `json:"subject"`
-	HtmlBody  string `json:"html_body"`
 	PlainBody string `json:"plain_body"`
 }
 
@@ -25,7 +23,6 @@ func (app *application) sendMail(w http.ResponseWriter, r *http.Request) {
 		Name:      r.PostFormValue("name"),
 		Sender:    r.PostFormValue("sender"),
 		Subject:   r.PostFormValue("subject"),
-		HtmlBody:  r.PostFormValue("html_body"),
 		PlainBody: r.PostFormValue("plain_body"),
 	}
 	err := message.Validate()
@@ -41,14 +38,14 @@ func (app *application) sendMail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	app.background(func() {
-		sender := (&mail.Address{Name: message.Name, Address: message.Sender}).String()
-		err := app.mailer.Send(sender, "new_mail.tmpl", message)
+		err := app.mailer.Send(message.Name, message.Sender, "new_mail.tmpl", message)
 		if err != nil {
-			app.serverErrorResponse(w, r, err)
+			// The response was already sent, so the error can only be logged.
+			app.logger.Error("failed to send mail", "sender", message.Sender, "error", err.Error())
 			return
 		}
 
-		app.logger.Info("processed new mail", "sender", sender)
+		app.logger.Info("processed new mail", "sender", message.Sender)
 	})
 
 	app.sentResponse(w, r, message.Sender, redirect)
@@ -60,6 +57,5 @@ func (m messageInput) Validate() error {
 		validation.Field(&m.Subject, validation.RuneLength(0, 100), validation.Match(singleLineValidation)),
 		validation.Field(&m.Name, validation.Required, validation.RuneLength(5, 30), validation.Match(singleLineValidation)),
 		validation.Field(&m.PlainBody, validation.Required, validation.RuneLength(1, 10000)),
-		validation.Field(&m.HtmlBody, validation.RuneLength(0, 20000)),
 	)
 }

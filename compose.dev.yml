@@ -9,6 +9,7 @@ services:
             SF_SMTP_HOST: mailpit
             SF_SMTP_PORT: 1025
             SF_SMTP_TLS: none
+            SF_SMTP_FROM: forms@example.com
             SF_SMTP_RECEIVER: john@example.com
 
     mailpit:
