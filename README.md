@@ -13,6 +13,7 @@ It can be used with good old static HTML forms or Javascript-based ones.
   * Captcha integration:
     * [Cloudflare Turnstile](https://www.cloudflare.com/products/turnstile/)
     * [Friendly Captcha](https://friendlycaptcha.com/)
+* Redirect to a success page after submission
 * Support TLS- and non-encrypted SMTP connections
 * Healthcheck endpoint for deployments
 
@@ -60,3 +61,21 @@ The configuration can be done entirely via environment variables
 | `SF_CAPTCHA_SECRET`       | _none_                     | Secret / API key of the captcha provider, required when captcha is enabled                    |
 | `SF_CAPTCHA_SITEKEY`      | _none_                     | Sitekey, only used by Friendly Captcha (optional)                                             |
 | `SF_HONEYPOT_FIELD`       | _none_                     | Name of the honeypot form field. If set and the field is filled, the mail is silently dropped |
+| `SF_REDIRECT_URL`         | _none_                     | Success page visitors are redirected to after submitting. If unset, a JSON response is sent   |
+
+#### Redirect after submission
+
+By default `/v1/send` answers with JSON, which suits Javascript-based forms. For plain HTML forms,
+set `SF_REDIRECT_URL` and visitors are redirected (`303 See Other`) to that page after submitting.
+
+A form can choose a different success page on the same site with a `_redirect` field. Its value is
+used as a path on the origin of `SF_REDIRECT_URL`:
+
+```html
+<input type="hidden" name="_redirect" value="/thank-you">
+```
+
+With `SF_REDIRECT_URL=https://example.com` this redirects to `https://example.com/thank-you`.
+A leading `/` is optional. Sending `_redirect` while `SF_REDIRECT_URL` is unset is rejected with `422`.
+
+Note: when `SF_REDIRECT_URL` is set, every submission is redirected, including those from Javascript clients.

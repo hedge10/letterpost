@@ -42,6 +42,8 @@ type config struct {
 	} `envPrefix:"CAPTCHA_"`
 	// honeypot, disabled when empty
 	HoneypotField string `env:"HONEYPOT_FIELD"`
+	// success page after submission, empty for a JSON response
+	RedirectURL string `env:"REDIRECT_URL"`
 }
 
 type application struct {
@@ -58,6 +60,11 @@ func main() {
 	var cfg config
 	if err := env.ParseWithOptions(&cfg, env.Options{Prefix: "SF_"}); err != nil {
 		logger.Error(err.Error())
+		os.Exit(1)
+	}
+
+	if _, ok := originOf(cfg.RedirectURL); cfg.RedirectURL != "" && !ok {
+		logger.Error("SF_REDIRECT_URL must be an absolute http(s) URL")
 		os.Exit(1)
 	}
 

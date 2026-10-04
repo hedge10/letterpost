@@ -136,10 +136,8 @@ func (app *application) honeypot(next http.Handler) http.Handler {
 
 		// Pretend the mail was sent, so bots get no signal that they were caught.
 		app.logger.Info("honeypot triggered, mail discarded", "ip", realip.FromRequest(r))
-		err := app.writeJSON(w, http.StatusOK, envelope{"email_status": "sent", "email_sender": r.PostFormValue("sender")}, nil)
-		if err != nil {
-			app.serverErrorResponse(w, r, err)
-		}
+		redirect, _ := app.redirectTarget(r.PostFormValue("_redirect"))
+		app.sentResponse(w, r, r.PostFormValue("sender"), redirect)
 	})
 }
 

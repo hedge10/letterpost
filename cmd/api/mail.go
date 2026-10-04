@@ -34,6 +34,12 @@ func (app *application) sendMail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	redirect, err := app.redirectTarget(r.PostFormValue("_redirect"))
+	if err != nil {
+		app.failedValidationResponse(w, r, validation.Errors{"_redirect": err})
+		return
+	}
+
 	app.background(func() {
 		sender := (&mail.Address{Name: message.Name, Address: message.Sender}).String()
 		err := app.mailer.Send(sender, "new_mail.tmpl", message)
@@ -45,11 +51,7 @@ func (app *application) sendMail(w http.ResponseWriter, r *http.Request) {
 		app.logger.Info("processed new mail", "sender", sender)
 	})
 
-	err = app.writeJSON(w, http.StatusOK, envelope{"email_status": "sent", "email_sender": message.Sender}, nil)
-	if err != nil {
-		app.serverErrorResponse(w, r, err)
-		return
-	}
+	app.sentResponse(w, r, message.Sender, redirect)
 }
 
 func (m messageInput) Validate() error {
