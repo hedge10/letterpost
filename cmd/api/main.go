@@ -1,45 +1,45 @@
 package main
 
 import (
-	"flag"
 	"log/slog"
 	"os"
-	"strings"
 	"sync"
 
 	"hedge10.staticform/internal/captcha"
 	"hedge10.staticform/internal/mailer"
+
+	"github.com/caarlos0/env/v11"
 )
 
 type config struct {
-	port int
-	env  string
+	Port int    `env:"PORT" envDefault:"4000"`
+	Env  string `env:"ENV" envDefault:"prod"`
 	// rate limiter
-	limiter struct {
-		rps     float64
-		burst   int
-		enabled bool
-	}
+	Limiter struct {
+		RPS     float64 `env:"RPS" envDefault:"2"`
+		Burst   int     `env:"BURST" envDefault:"4"`
+		Enabled bool    `env:"ENABLED" envDefault:"true"`
+	} `envPrefix:"LIMITER_"`
 	// smtp connection credentials
-	smtp struct {
-		host     string
-		port     int
-		username string
-		password string
-		receiver string
-		tls      string
-	}
+	Smtp struct {
+		Host     string `env:"HOST" envDefault:"sandbox.smtp.mailtrap.io"`
+		Port     int    `env:"PORT" envDefault:"25"`
+		Username string `env:"USERNAME"`
+		Password string `env:"PASSWORD"`
+		Receiver string `env:"RECEIVER,required"`
+		Tls      string `env:"TLS" envDefault:"mandatory"`
+	} `envPrefix:"SMTP_"`
 	// cors
-	cors struct {
-		trustedOrigins []string
-	}
+	Cors struct {
+		TrustedOrigins []string `env:"TRUSTED_ORIGINS" envSeparator:" "`
+	} `envPrefix:"CORS_"`
 	// captcha
-	captcha struct {
-		provider string
-		secret   string
-		sitekey  string
-		enabled  bool
-	}
+	Captcha struct {
+		Provider string `env:"PROVIDER"`
+		Secret   string `env:"SECRET"`
+		Sitekey  string `env:"SITEKEY"`
+		Enabled  bool   `env:"ENABLED" envDefault:"false"`
+	} `envPrefix:"CAPTCHA_"`
 }
 
 type application struct {
@@ -51,42 +51,20 @@ type application struct {
 }
 
 func main() {
-	var cfg config
-
-	flag.IntVar(&cfg.port, "port", 4000, "API server port")
-	flag.StringVar(&cfg.env, "env", "dev", "Environment (dev|prod)")
-
-	flag.StringVar(&cfg.smtp.host, "smtp-host", "sandbox.smtp.mailtrap.io", "SMTP host")
-	flag.IntVar(&cfg.smtp.port, "smtp-port", 25, "SMTP port")
-	flag.StringVar(&cfg.smtp.username, "smtp-username", "demo-user", "SMTP username")
-	flag.StringVar(&cfg.smtp.password, "smtp-password", "s3cret123", "SMTP password")
-	flag.StringVar(&cfg.smtp.receiver, "smtp-receiver", "jane.doe@example.com", "SMTP receiver")
-	flag.StringVar(&cfg.smtp.tls, "smtp-tls", "mandatory", "SMTP STARTTLS policy (mandatory|opportunistic|none)")
-
-	flag.Func("cors-trusted-origins", "Trusted CORS origins (space separated)", func(val string) error {
-		cfg.cors.trustedOrigins = strings.Fields(val)
-		return nil
-	})
-
-	flag.Float64Var(&cfg.limiter.rps, "limiter-rps", 2, "Rate limiter maximum requests per second")
-	flag.IntVar(&cfg.limiter.burst, "limiter-burst", 4, "Rate limiter maximum burst")
-	flag.BoolVar(&cfg.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
-
-	flag.StringVar(&cfg.captcha.provider, "captcha-provider", "", "Captcha provider (cloudflare | friendly-captcha)")
-	flag.StringVar(&cfg.captcha.secret, "captcha-secret", "", "Captcha secret")
-	flag.StringVar(&cfg.captcha.sitekey, "captcha-sitekey", "", "Captcha sitekey (optional)")
-	flag.BoolVar(&cfg.captcha.enabled, "captcha-enabled", false, "Enable captcha support")
-
-	flag.Parse()
-
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	mailer, err := mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.receiver)
+	var cfg config
+	if err := env.ParseWithOptions(&cfg, env.Options{Prefix: "SF_"}); err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
+
+	mailer, err := mailer.New(cfg.Smtp.Host, cfg.Smtp.Port, cfg.Smtp.Username, cfg.Smtp.Password, cfg.Smtp.Receiver)
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
-	err = mailer.SetTlsPolicy(cfg.smtp.tls)
+	err = mailer.SetTlsPolicy(cfg.Smtp.Tls)
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
@@ -98,8 +76,8 @@ func main() {
 		mailer: mailer,
 	}
 
-	if cfg.captcha.enabled {
-		app.captcha, err = captcha.New(captcha.Provider(cfg.captcha.provider), cfg.captcha.secret, cfg.captcha.sitekey)
+	if cfg.Captcha.Enabled {
+		app.captcha, err = captcha.New(captcha.Provider(cfg.Captcha.Provider), cfg.Captcha.Secret, cfg.Captcha.Sitekey)
 		if err != nil {
 			logger.Error(err.Error())
 			os.Exit(1)

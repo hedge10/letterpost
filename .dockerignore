@@ -1,1 +1,8 @@
+.editorconfig
+.gitignore
+.github/*
 bin/*
+data/*
+Makefile
+README.md
+.git

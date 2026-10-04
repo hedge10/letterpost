@@ -12,7 +12,8 @@ build:
 ## run: run the cmd/api application
 .PHONY: run
 run:
-	go run ./cmd/api -smtp-host=localhost -smtp-port=1025 -smtp-tls=none
+	SF_ENV=dev SF_SMTP_HOST=localhost SF_SMTP_PORT=1025 SF_SMTP_TLS=none SF_SMTP_RECEIVER=john@example.com \
+		go run ./cmd/api
 
 ## dispatch-msg: send a test message to the local API
 .PHONY: dispatch-msg

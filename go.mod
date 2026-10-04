@@ -3,6 +3,7 @@ module hedge10.staticform
 go 1.27.1
 
 require (
+	github.com/caarlos0/env/v11 v11.4.1
 	github.com/friendlycaptcha/friendly-captcha-go v0.4.1
 	github.com/go-ozzo/ozzo-validation/v4 v4.4.1
 	github.com/julienschmidt/httprouter v1.3.0
