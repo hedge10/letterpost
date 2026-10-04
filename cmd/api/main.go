@@ -22,7 +22,7 @@ type config struct {
 	} `envPrefix:"LIMITER_"`
 	// smtp connection credentials
 	Smtp struct {
-		Host     string `env:"HOST" envDefault:"sandbox.smtp.mailtrap.io"`
+		Host     string `env:"HOST,required" envDefault:""`
 		Port     int    `env:"PORT" envDefault:"25"`
 		Username string `env:"USERNAME"`
 		Password string `env:"PASSWORD"`
@@ -40,14 +40,16 @@ type config struct {
 		Sitekey  string `env:"SITEKEY"`
 		Enabled  bool   `env:"ENABLED" envDefault:"false"`
 	} `envPrefix:"CAPTCHA_"`
+	// honeypot, disabled when empty
+	HoneypotField string `env:"HONEYPOT_FIELD"`
 }
 
 type application struct {
-	config  config
-	logger  *slog.Logger
-	mailer  *mailer.Mailer
-	captcha captcha.Verifier
-	wg      sync.WaitGroup
+	config          config
+	logger          *slog.Logger
+	mailer          *mailer.Mailer
+	captchaVerifier captcha.Verifier
+	wg              sync.WaitGroup
 }
 
 func main() {
@@ -77,7 +79,7 @@ func main() {
 	}
 
 	if cfg.Captcha.Enabled {
-		app.captcha, err = captcha.New(captcha.Provider(cfg.Captcha.Provider), cfg.Captcha.Secret, cfg.Captcha.Sitekey)
+		app.captchaVerifier, err = captcha.New(captcha.Provider(cfg.Captcha.Provider), cfg.Captcha.Secret, cfg.Captcha.Sitekey)
 		if err != nil {
 			logger.Error(err.Error())
 			os.Exit(1)

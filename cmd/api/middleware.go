@@ -10,7 +10,7 @@ import (
 	"github.com/tomasen/realip"
 	"golang.org/x/time/rate"
 
-	"hedge10.staticform/internal/captcha"
+	ic "hedge10.staticform/internal/captcha"
 )
 
 func (app *application) enableCORS(next http.Handler) http.Handler {
@@ -96,21 +96,21 @@ func (app *application) rateLimit(next http.Handler) http.Handler {
 	})
 }
 
-func (app *application) requireCaptcha(next http.Handler) http.Handler {
-	if app.captcha == nil {
+func (app *application) captcha(next http.Handler) http.Handler {
+	if app.captchaVerifier == nil {
 		return next
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token := r.PostFormValue(app.captcha.FormField())
+		token := r.PostFormValue(app.captchaVerifier.FormField())
 		if token == "" {
 			app.captchaFailedResponse(w, r)
 			return
 		}
 
-		err := app.captcha.Verify(r.Context(), token, realip.FromRequest(r))
+		err := app.captchaVerifier.Verify(r.Context(), token, realip.FromRequest(r))
 		if err != nil {
-			if errors.Is(err, captcha.ErrInvalidToken) {
+			if errors.Is(err, ic.ErrInvalidToken) {
 				app.captchaFailedResponse(w, r)
 				return
 			}
@@ -120,6 +120,26 @@ func (app *application) requireCaptcha(next http.Handler) http.Handler {
 		}
 
 		next.ServeHTTP(w, r)
+	})
+}
+
+func (app *application) honeypot(next http.Handler) http.Handler {
+	if app.config.HoneypotField == "" {
+		return next
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.PostFormValue(app.config.HoneypotField) == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Pretend the mail was sent, so bots get no signal that they were caught.
+		app.logger.Info("honeypot triggered, mail discarded", "ip", realip.FromRequest(r))
+		err := app.writeJSON(w, http.StatusOK, envelope{"email_status": "sent", "email_sender": r.PostFormValue("sender")}, nil)
+		if err != nil {
+			app.serverErrorResponse(w, r, err)
+		}
 	})
 }
 
