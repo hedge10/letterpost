@@ -9,11 +9,12 @@ It can be used with good old static HTML forms or Javascript-based ones.
 * Input validation with sane defaults
 * IP-based rate limiting
 * Spam Protection
-  * Honeypot field for spam protection
-  * Captcha integration:
+  * Honeypot field supported
+  * Captcha integration
     * [Cloudflare Turnstile](https://www.cloudflare.com/products/turnstile/)
     * [Friendly Captcha](https://friendlycaptcha.com/)
 * Redirect to a success page after submission
+* Webhooks on submission lifecycle events
 * Support TLS- and non-encrypted SMTP connections
 * Healthcheck endpoint for deployments
 
@@ -81,3 +82,61 @@ With `SF_REDIRECT_URL=https://example.com` this redirects to `https://example.co
 A leading `/` is optional. Sending `_redirect` while `SF_REDIRECT_URL` is unset is rejected with `422`.
 
 Note: when `SF_REDIRECT_URL` is set, every submission is redirected, including those from Javascript clients.
+
+#### Webhooks
+
+StaticForm can notify other services about submissions. Webhooks are defined in a `webhooks.json`
+file in the working directory.
+
+```json
+[
+  {
+    "name": "crm-sync",
+    "url": "https://crm.example.com/hook",
+    "method": "POST",
+    "events": ["success", "error"]
+  }
+]
+```
+
+| Field    | Description                                                    |
+|----------|----------------------------------------------------------------|
+| `name`   | Name of the webhook, used in logs and the payload              |
+| `url`    | Absolute `http` or `https` URL that is called                  |
+| `method` | `POST`, `PUT` or `PATCH`                                       |
+| `events` | One or more of `before`, `after`, `error`, `success`           |
+
+| Event     | Called                                           |
+|-----------|--------------------------------------------------|
+| `before`  | Before the mail is sent                          |
+| `success` | After the mail was sent                          |
+| `error`   | After sending the mail failed                    |
+| `after`   | After `success` or `error`, regardless of result |
+
+Each request has `Content-Type: application/json` and contains the message fields in `payload`, plus `metadata`:
+
+```json
+{
+  "payload": {
+    "name": "Jane Doe",
+    "sender": "jane.doe@example.com",
+    "subject": "Hello",
+    "plain_body": "Some demo message"
+  },
+  "metadata": {
+    "event_name": "success",
+    "webhook_name": "crm-sync"
+  }
+}
+```
+
+* Webhooks are fire-and-forget: they are called in the background and never read the response.
+* Redirects are not followed, so use the final URL.
+* Failures are only logged, with the webhook name and host but not the full URL.
+* Events are only fired for submissions that passed validation and the honeypot and captcha checks.
+
+Mount the file at `/webhooks.json` in the Docker image.
+
+```sh
+docker run -d -p 4000:4000 -v ./webhooks.json:/webhooks.json:ro ghcr.io/hedge10/staticform:latest
+```

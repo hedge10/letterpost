@@ -1,14 +1,19 @@
 package main
 
 import (
+	"encoding/json/v2"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
+
+	"hedge10.staticform/internal/webhook"
 
 	validation "github.com/go-ozzo/ozzo-validation/v4"
 )
@@ -104,6 +109,80 @@ func TestSendMailRejectsInvalidInput(t *testing.T) {
 			}
 			if body := w.Body.String(); strings.Contains(body, "email_status") {
 				t.Errorf("invalid input must not be reported as sent, body: %s", body)
+			}
+		})
+	}
+}
+
+type fakeMailer struct {
+	err error
+}
+
+func (f fakeMailer) Send(name, replyTo, templateFile string, data any) error {
+	return f.err
+}
+
+// recordingTransport answers every webhook request with 200 OK and records
+// its event. Webhook requests run concurrently, so access is guarded by a mutex.
+type recordingTransport struct {
+	mu     sync.Mutex
+	events []webhook.Event
+}
+
+func (rt *recordingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	defer r.Body.Close()
+
+	var body struct {
+		Metadata struct {
+			EventName webhook.Event `json:"event_name"`
+		} `json:"metadata"`
+	}
+	err := json.UnmarshalRead(r.Body, &body)
+	if err != nil {
+		return nil, err
+	}
+
+	rt.mu.Lock()
+	rt.events = append(rt.events, body.Metadata.EventName)
+	rt.mu.Unlock()
+
+	return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: http.NoBody, Request: r}, nil
+}
+
+func TestSendMailFiresWebhooks(t *testing.T) {
+	tests := []struct {
+		name    string
+		sendErr error
+		want    []webhook.Event
+	}{
+		{name: "mail sent", sendErr: nil, want: []webhook.Event{webhook.After, webhook.Before, webhook.Success}},
+		{name: "mail failed", sendErr: errors.New("smtp unavailable"), want: []webhook.Event{webhook.After, webhook.Before, webhook.Error}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			transport := &recordingTransport{}
+			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+			app := &application{logger: logger, mailer: fakeMailer{err: tt.sendErr}}
+			app.webhooks = webhook.New([]webhook.Webhook{{
+				Name:   "all",
+				URL:    "https://hooks.example.com/all",
+				Method: http.MethodPost,
+				Events: []webhook.Event{webhook.Before, webhook.After, webhook.Error, webhook.Success},
+			}}, logger, app.background, transport)
+
+			form := url.Values{"name": {"Jane Doe"}, "sender": {"jane.doe@gmail.com"}, "plain_body": {"Hi"}}
+			r := httptest.NewRequest(http.MethodPost, "/v1/send", strings.NewReader(form.Encode()))
+			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			w := httptest.NewRecorder()
+
+			app.sendMail(w, r)
+			app.wg.Wait()
+
+			// Webhook requests run concurrently, so only the set of events is checked.
+			slices.Sort(transport.events)
+			if !slices.Equal(transport.events, tt.want) {
+				t.Errorf("fired %v, want %v", transport.events, tt.want)
 			}
 		})
 	}

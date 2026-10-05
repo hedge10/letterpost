@@ -7,8 +7,13 @@ import (
 
 	"hedge10.staticform/internal/captcha"
 	"hedge10.staticform/internal/mailer"
+	"hedge10.staticform/internal/webhook"
 
 	"github.com/caarlos0/env/v11"
+)
+
+const (
+	webhooksFile = "webhooks.json"
 )
 
 type config struct {
@@ -47,10 +52,15 @@ type config struct {
 	RedirectURL string `env:"REDIRECT_URL"`
 }
 
+type mailSender interface {
+	Send(name, replyTo, templateFile string, data any) error
+}
+
 type application struct {
 	config          config
 	logger          *slog.Logger
-	mailer          *mailer.Mailer
+	mailer          mailSender
+	webhooks        *webhook.Dispatcher
 	captchaVerifier captcha.Verifier
 	wg              sync.WaitGroup
 }
@@ -95,6 +105,14 @@ func main() {
 			os.Exit(1)
 		}
 	}
+
+	webhooks, err := webhook.Load(webhooksFile)
+	if err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
+	app.webhooks = webhook.New(webhooks, logger, app.background, nil)
+	logger.Info("loaded webhooks", "count", len(webhooks))
 
 	err = app.serve()
 	if err != nil {
