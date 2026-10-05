@@ -35,7 +35,7 @@ docker run -d -p 4000:4000 \
 Check that it is up:
 
 ```sh
-curl http://localhost:4000/v1/healthcheck
+curl http://localhost:4000/health
 ```
 
 Forms can now be submitted via `POST` to `http://localhost:4000/v1/send`.
