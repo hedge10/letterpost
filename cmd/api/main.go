@@ -5,9 +5,9 @@ import (
 	"os"
 	"sync"
 
-	"codeberg.org/hedge10/staticform/internal/captcha"
-	"codeberg.org/hedge10/staticform/internal/mailer"
-	"codeberg.org/hedge10/staticform/internal/webhook"
+	"codeberg.org/hedge10/staticform/captcha"
+	"codeberg.org/hedge10/staticform/mailer"
+	"codeberg.org/hedge10/staticform/webhook"
 
 	"github.com/caarlos0/env/v11"
 )

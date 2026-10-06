@@ -10,7 +10,7 @@ import (
 	"github.com/tomasen/realip"
 	"golang.org/x/time/rate"
 
-	ic "codeberg.org/hedge10/staticform/internal/captcha"
+	ic "codeberg.org/hedge10/staticform/captcha"
 )
 
 func (app *application) enableCORS(next http.Handler) http.Handler {
