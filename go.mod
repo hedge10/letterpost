@@ -1,4 +1,4 @@
-module hedge10.staticform
+module codeberg.org/hedge10/staticform
 
 go 1.27.1
 

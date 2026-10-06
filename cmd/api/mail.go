@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"regexp"
 
-	"hedge10.staticform/internal/webhook"
+	"codeberg.org/hedge10/staticform/internal/webhook"
 
 	validation "github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/go-ozzo/ozzo-validation/v4/is"
