@@ -13,7 +13,7 @@ ARG TARGETOS TARGETARCH
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -trimpath -ldflags="-s -w" -o staticform ./cmd/api
+    go build -trimpath -ldflags="-s -w" -o staticform ./cmd/staticform
 
 FROM alpine:3.24
 RUN addgroup -S staticform && adduser -S -G staticform staticform

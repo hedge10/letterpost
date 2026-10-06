@@ -3,10 +3,10 @@ package main
 import (
 	"log/slog"
 	"os"
-	"sync"
 
 	"codeberg.org/hedge10/staticform/captcha"
 	"codeberg.org/hedge10/staticform/mailer"
+	"codeberg.org/hedge10/staticform/server"
 	"codeberg.org/hedge10/staticform/webhook"
 
 	"github.com/caarlos0/env/v11"
@@ -17,14 +17,7 @@ const (
 )
 
 type config struct {
-	Port int    `env:"PORT" envDefault:"4000"`
-	Env  string `env:"ENV" envDefault:"prod"`
-	// rate limiter
-	Limiter struct {
-		RPS     float64 `env:"RPS" envDefault:"2"`
-		Burst   int     `env:"BURST" envDefault:"4"`
-		Enabled bool    `env:"ENABLED" envDefault:"true"`
-	} `envPrefix:"LIMITER_"`
+	Server server.Config
 	// smtp connection credentials
 	Smtp struct {
 		Host     string `env:"HOST,required" envDefault:""`
@@ -35,10 +28,6 @@ type config struct {
 		Receiver string `env:"RECEIVER,required"`
 		Tls      string `env:"TLS" envDefault:"mandatory"`
 	} `envPrefix:"SMTP_"`
-	// cors
-	Cors struct {
-		TrustedOrigins []string `env:"TRUSTED_ORIGINS" envSeparator:" "`
-	} `envPrefix:"CORS_"`
 	// captcha
 	Captcha struct {
 		Provider string `env:"PROVIDER"`
@@ -46,23 +35,6 @@ type config struct {
 		Sitekey  string `env:"SITEKEY"`
 		Enabled  bool   `env:"ENABLED" envDefault:"false"`
 	} `envPrefix:"CAPTCHA_"`
-	// honeypot, disabled when empty
-	HoneypotField string `env:"HONEYPOT_FIELD"`
-	// success page after submission, empty for a JSON response
-	RedirectURL string `env:"REDIRECT_URL"`
-}
-
-type mailSender interface {
-	Send(name, replyTo, templateFile string, data any) error
-}
-
-type application struct {
-	config          config
-	logger          *slog.Logger
-	mailer          mailSender
-	webhooks        *webhook.Dispatcher
-	captchaVerifier captcha.Verifier
-	wg              sync.WaitGroup
 }
 
 func main() {
@@ -72,13 +44,6 @@ func main() {
 	if err := env.ParseWithOptions(&cfg, env.Options{Prefix: "SF_"}); err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
-	}
-
-	if cfg.RedirectURL != "" {
-		if _, ok := originOf(cfg.RedirectURL); !ok {
-			logger.Error("SF_REDIRECT_URL must be an absolute http(s) URL")
-			os.Exit(1)
-		}
 	}
 
 	mailer, err := mailer.New(cfg.Smtp.Host, cfg.Smtp.Port, cfg.Smtp.Username, cfg.Smtp.Password, cfg.Smtp.From, cfg.Smtp.Receiver)
@@ -92,14 +57,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	app := &application{
-		config: cfg,
-		logger: logger,
-		mailer: mailer,
-	}
-
+	var captchaVerifier captcha.Verifier
 	if cfg.Captcha.Enabled {
-		app.captchaVerifier, err = captcha.New(captcha.Provider(cfg.Captcha.Provider), cfg.Captcha.Secret, cfg.Captcha.Sitekey)
+		captchaVerifier, err = captcha.New(captcha.Provider(cfg.Captcha.Provider), cfg.Captcha.Secret, cfg.Captcha.Sitekey)
 		if err != nil {
 			logger.Error(err.Error())
 			os.Exit(1)
@@ -111,10 +71,15 @@ func main() {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
-	app.webhooks = webhook.New(webhooks, logger, app.background, nil)
 	logger.Info("loaded webhooks", "count", len(webhooks))
 
-	err = app.serve()
+	srv, err := server.New(cfg.Server, logger, mailer, captchaVerifier, webhooks)
+	if err != nil {
+		logger.Error("cannot create server", "error", err)
+		os.Exit(1)
+	}
+
+	err = srv.Serve()
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)

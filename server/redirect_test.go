@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"io"
@@ -31,7 +31,7 @@ func TestRedirectTarget(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			app := &application{}
+			app := &Server{}
 			app.config.RedirectURL = tt.redirectURL
 
 			got, err := app.redirectTarget(tt.field)
@@ -53,7 +53,7 @@ func TestRedirectTarget(t *testing.T) {
 }
 
 func TestSendMailRejectsRedirectWithoutRedirectURL(t *testing.T) {
-	app := &application{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	app := &Server{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 
 	form := url.Values{
 		"name":       {"Jane Doe"},
@@ -77,7 +77,7 @@ func TestSendMailRejectsRedirectWithoutRedirectURL(t *testing.T) {
 }
 
 func TestHoneypotRedirects(t *testing.T) {
-	app := &application{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	app := &Server{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	app.config.HoneypotField = "website"
 	app.config.RedirectURL = "https://example.com/thanks"
 

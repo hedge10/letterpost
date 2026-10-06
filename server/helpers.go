@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"encoding/json/jsontext"
@@ -9,7 +9,7 @@ import (
 
 type envelope map[string]any
 
-func (app *application) background(fn func()) {
+func (app *Server) background(fn func()) {
 	app.wg.Go(func() {
 		defer func() {
 			pv := recover()
@@ -21,7 +21,7 @@ func (app *application) background(fn func()) {
 	})
 }
 
-func (app *application) writeJSON(w http.ResponseWriter, status int, data envelope, headers http.Header) error {
+func (app *Server) writeJSON(w http.ResponseWriter, status int, data envelope, headers http.Header) error {
 	opts := []json.Options{
 		json.Deterministic(true),
 		jsontext.Multiline(true),

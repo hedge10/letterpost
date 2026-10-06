@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"errors"
@@ -9,7 +9,7 @@ import (
 
 var errRedirectNotAllowed = errors.New("requires SF_REDIRECT_URL to be set")
 
-func (app *application) redirectTarget(path string) (string, error) {
+func (app *Server) redirectTarget(path string) (string, error) {
 	if path == "" {
 		return app.config.RedirectURL, nil
 	}
@@ -31,7 +31,7 @@ func originOf(rawURL string) (string, bool) {
 	return u.Scheme + "://" + u.Host, true
 }
 
-func (app *application) sentResponse(w http.ResponseWriter, r *http.Request, sender, target string) {
+func (app *Server) sentResponse(w http.ResponseWriter, r *http.Request, sender, target string) {
 	if target != "" {
 		http.Redirect(w, r, target, http.StatusSeeOther)
 		return

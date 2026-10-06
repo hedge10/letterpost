@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"errors"
@@ -13,7 +13,7 @@ import (
 	ic "codeberg.org/hedge10/staticform/captcha"
 )
 
-func (app *application) enableCORS(next http.Handler) http.Handler {
+func (app *Server) enableCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Vary", "Origin")
 		w.Header().Add("Vary", "Access-Control-Request-Method")
@@ -21,8 +21,8 @@ func (app *application) enableCORS(next http.Handler) http.Handler {
 		origin := r.Header.Get("Origin")
 
 		if origin != "" {
-			for i := range app.config.Cors.TrustedOrigins {
-				if origin == app.config.Cors.TrustedOrigins[i] {
+			for i := range app.config.TrustedOrigins {
+				if origin == app.config.TrustedOrigins[i] {
 					w.Header().Set("Access-Control-Allow-Origin", origin)
 
 					if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
@@ -42,7 +42,7 @@ func (app *application) enableCORS(next http.Handler) http.Handler {
 	})
 }
 
-func (app *application) rateLimit(next http.Handler) http.Handler {
+func (app *Server) rateLimit(next http.Handler) http.Handler {
 	if !app.config.Limiter.Enabled {
 		return next
 	}
@@ -96,7 +96,7 @@ func (app *application) rateLimit(next http.Handler) http.Handler {
 	})
 }
 
-func (app *application) captcha(next http.Handler) http.Handler {
+func (app *Server) captcha(next http.Handler) http.Handler {
 	if app.captchaVerifier == nil {
 		return next
 	}
@@ -123,7 +123,7 @@ func (app *application) captcha(next http.Handler) http.Handler {
 	})
 }
 
-func (app *application) honeypot(next http.Handler) http.Handler {
+func (app *Server) honeypot(next http.Handler) http.Handler {
 	if app.config.HoneypotField == "" {
 		return next
 	}
@@ -141,7 +141,7 @@ func (app *application) honeypot(next http.Handler) http.Handler {
 	})
 }
 
-func (app *application) recoverPanic(next http.Handler) http.Handler {
+func (app *Server) recoverPanic(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			// Use the built-in recover() function to check if a panic occurred.

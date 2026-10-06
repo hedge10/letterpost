@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"net/http"
@@ -20,7 +20,7 @@ type messageInput struct {
 
 var singleLineValidation = regexp.MustCompile(`^[^\r\n]*$`)
 
-func (app *application) sendMail(w http.ResponseWriter, r *http.Request) {
+func (app *Server) sendMail(w http.ResponseWriter, r *http.Request) {
 	message := messageInput{
 		Name:      r.PostFormValue("name"),
 		Sender:    r.PostFormValue("sender"),

@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"encoding/json/v2"
@@ -95,7 +95,7 @@ func TestSendMailRejectsInvalidInput(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			app := &application{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+			app := &Server{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 
 			r := httptest.NewRequest(http.MethodPost, "/v1/send", strings.NewReader(tt.form.Encode()))
 			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -163,7 +163,7 @@ func TestSendMailFiresWebhooks(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			transport := &recordingTransport{}
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-			app := &application{logger: logger, mailer: fakeMailer{err: tt.sendErr}}
+			app := &Server{logger: logger, mailer: fakeMailer{err: tt.sendErr}}
 			app.webhooks = webhook.New([]webhook.Webhook{{
 				Name:   "all",
 				URL:    "https://hooks.example.com/all",

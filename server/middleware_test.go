@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"io"
@@ -27,7 +27,7 @@ func TestHoneypot(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			app := &application{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+			app := &Server{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 			app.config.HoneypotField = tt.field
 
 			called := false
