@@ -4,6 +4,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,8 @@ import (
 	"sync"
 	"testing"
 
+	"codeberg.org/hedge10/staticform/mailer"
+	"codeberg.org/hedge10/staticform/pipeline"
 	"codeberg.org/hedge10/staticform/webhook"
 
 	validation "github.com/go-ozzo/ozzo-validation/v4"
@@ -115,10 +118,14 @@ func TestSendMailRejectsInvalidInput(t *testing.T) {
 }
 
 type fakeMailer struct {
-	err error
+	err  error
+	sent *[]mailer.Message
 }
 
-func (f fakeMailer) Send(name, replyTo, templateFile string, data any) error {
+func (f fakeMailer) Send(msg mailer.Message) error {
+	if f.sent != nil {
+		*f.sent = append(*f.sent, msg)
+	}
 	return f.err
 }
 
@@ -126,7 +133,7 @@ func (f fakeMailer) Send(name, replyTo, templateFile string, data any) error {
 // its event. Webhook requests run concurrently, so access is guarded by a mutex.
 type recordingTransport struct {
 	mu     sync.Mutex
-	events []webhook.Event
+	events []pipeline.Event
 }
 
 func (rt *recordingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
@@ -134,7 +141,7 @@ func (rt *recordingTransport) RoundTrip(r *http.Request) (*http.Response, error)
 
 	var body struct {
 		Metadata struct {
-			EventName webhook.Event `json:"event_name"`
+			EventName pipeline.Event `json:"event_name"`
 		} `json:"metadata"`
 	}
 	err := json.UnmarshalRead(r.Body, &body)
@@ -153,23 +160,23 @@ func TestSendMailFiresWebhooks(t *testing.T) {
 	tests := []struct {
 		name    string
 		sendErr error
-		want    []webhook.Event
+		want    []pipeline.Event
 	}{
-		{name: "mail sent", sendErr: nil, want: []webhook.Event{webhook.After, webhook.Before, webhook.Success}},
-		{name: "mail failed", sendErr: errors.New("smtp unavailable"), want: []webhook.Event{webhook.After, webhook.Before, webhook.Error}},
+		{name: "mail sent", sendErr: nil, want: []pipeline.Event{pipeline.After, pipeline.Before, pipeline.Success}},
+		{name: "mail failed", sendErr: errors.New("smtp unavailable"), want: []pipeline.Event{pipeline.After, pipeline.Before, pipeline.Error}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			transport := &recordingTransport{}
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-			app := &Server{logger: logger, mailer: fakeMailer{err: tt.sendErr}}
-			app.webhooks = webhook.New([]webhook.Webhook{{
+			app := &Server{logger: logger}
+			app.pipeline = app.newPipeline(fakeMailer{err: tt.sendErr}, webhook.New([]webhook.Webhook{{
 				Name:   "all",
 				URL:    "https://hooks.example.com/all",
 				Method: http.MethodPost,
-				Events: []webhook.Event{webhook.Before, webhook.After, webhook.Error, webhook.Success},
-			}}, logger, app.background, transport)
+				Events: []pipeline.Event{pipeline.Before, pipeline.After, pipeline.Error, pipeline.Success},
+			}}, logger, app.background, transport))
 
 			form := url.Values{"name": {"Jane Doe"}, "sender": {"jane.doe@gmail.com"}, "plain_body": {"Hi"}}
 			r := httptest.NewRequest(http.MethodPost, "/v1/send", strings.NewReader(form.Encode()))
@@ -185,5 +192,56 @@ func TestSendMailFiresWebhooks(t *testing.T) {
 				t.Errorf("fired %v, want %v", transport.events, tt.want)
 			}
 		})
+	}
+}
+
+func TestNewRequiresValidReceiver(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	for _, receiver := range []string{"", "nope"} {
+		_, err := New(Config{Receiver: receiver}, logger, fakeMailer{}, nil, nil)
+		if err == nil {
+			t.Errorf("expected an error for receiver %q", receiver)
+		}
+	}
+}
+
+func TestSendMailMessage(t *testing.T) {
+	var sent []mailer.Message
+	app := &Server{
+		config: Config{Receiver: "owner@example.com"},
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	app.pipeline = app.newPipeline(fakeMailer{sent: &sent}, webhook.New(nil, app.logger, app.background, nil))
+
+	form := url.Values{"name": {"Jane Doe"}, "sender": {"jane.doe@gmail.com"}, "plain_body": {"Hi"}}
+	r := httptest.NewRequest(http.MethodPost, "/v1/send", strings.NewReader(form.Encode()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+
+	app.sendMail(w, r)
+	app.wg.Wait()
+
+	if len(sent) != 1 {
+		t.Fatalf("sent %d mails, want 1", len(sent))
+	}
+	msg := sent[0]
+	if !slices.Equal(msg.To, []string{"owner@example.com"}) {
+		t.Errorf("To = %q, want [owner@example.com]", msg.To)
+	}
+	if msg.FromName != "Jane Doe" || msg.ReplyToName != "Jane Doe" {
+		t.Errorf("FromName = %q, ReplyToName = %q, want Jane Doe", msg.FromName, msg.ReplyToName)
+	}
+	if msg.ReplyTo != "jane.doe@gmail.com" {
+		t.Errorf("ReplyTo = %q, want jane.doe@gmail.com", msg.ReplyTo)
+	}
+	if msg.Template != "new_mail.tmpl" {
+		t.Errorf("Template = %q, want new_mail.tmpl", msg.Template)
+	}
+}
+
+func TestMailTemplates(t *testing.T) {
+	if _, err := fs.Stat(MailTemplates, "new_mail.tmpl"); err != nil {
+		t.Error(err)
 	}
 }

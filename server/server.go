@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"codeberg.org/hedge10/staticform/captcha"
+	"codeberg.org/hedge10/staticform/mailer"
+	"codeberg.org/hedge10/staticform/pipeline"
 	"codeberg.org/hedge10/staticform/webhook"
 )
 
@@ -26,25 +28,30 @@ type Config struct {
 		Enabled bool    `env:"ENABLED" envDefault:"true"`
 	} `envPrefix:"LIMITER_"`
 	TrustedOrigins []string `env:"CORS_TRUSTED_ORIGINS" envSeparator:" "`
-	HoneypotField  string   `env:"HONEYPOT_FIELD"`
-	RedirectURL    string   `env:"REDIRECT_URL"`
+	// Receiver gets the form submissions.
+	Receiver      string `env:"SMTP_RECEIVER,required"`
+	HoneypotField string `env:"HONEYPOT_FIELD"`
+	RedirectURL   string `env:"REDIRECT_URL"`
 }
 
 type Mailer interface {
-	Send(name, replyTo, templateFile string, data any) error
+	Send(msg mailer.Message) error
 }
 
 // Server handles form submissions.
 type Server struct {
 	config          Config
 	logger          *slog.Logger
-	mailer          Mailer
-	webhooks        *webhook.Dispatcher
+	pipeline        *pipeline.Pipeline
 	captchaVerifier captcha.Verifier
 	wg              sync.WaitGroup
 }
 
-func New(cfg Config, logger *slog.Logger, mailer Mailer, captchaVerifier captcha.Verifier, webhooks []webhook.Webhook) (*Server, error) {
+func New(cfg Config, logger *slog.Logger, m Mailer, captchaVerifier captcha.Verifier, webhooks []webhook.Webhook) (*Server, error) {
+	if !mailer.ValidateAddress(cfg.Receiver) {
+		return nil, errors.New("missing or invalid receiver")
+	}
+
 	if cfg.RedirectURL != "" {
 		if _, ok := originOf(cfg.RedirectURL); !ok {
 			return nil, errors.New("redirect URL must be an absolute http(s) URL")
@@ -54,12 +61,28 @@ func New(cfg Config, logger *slog.Logger, mailer Mailer, captchaVerifier captcha
 	app := &Server{
 		config:          cfg,
 		logger:          logger,
-		mailer:          mailer,
 		captchaVerifier: captchaVerifier,
 	}
-	app.webhooks = webhook.New(webhooks, logger, app.background, nil)
+	app.pipeline = app.newPipeline(m, webhook.New(webhooks, logger, app.background, nil))
 
 	return app, nil
+}
+
+// newPipeline sends with m, logs every delivery and fires the webhooks.
+func (app *Server) newPipeline(m Mailer, d *webhook.Dispatcher) *pipeline.Pipeline {
+	p := pipeline.New(m.Send, app.logger, app.background)
+	p.On(app.logDelivery, pipeline.Success, pipeline.Error)
+	p.On(d.Hook(), pipeline.Events()...)
+	return p
+}
+
+// logDelivery logs the result of sending a mail.
+func (app *Server) logDelivery(_ pipeline.Event, s pipeline.Submission, err error) {
+	if err != nil {
+		app.logger.Error("failed to send mail", "sender", s.Message.ReplyTo, "error", err.Error())
+		return
+	}
+	app.logger.Info("processed new mail", "sender", s.Message.ReplyTo)
 }
 
 // Serve listens on the configured port until SIGINT or SIGTERM, then shuts

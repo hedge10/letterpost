@@ -2,9 +2,9 @@ package mailer
 
 import (
 	"bytes"
-	"embed"
 	"errors"
 	"fmt"
+	"io/fs"
 	nm "net/mail"
 	"time"
 
@@ -13,13 +13,20 @@ import (
 	"github.com/wneessen/go-mail"
 )
 
-//go:embed templates
-var templateFS embed.FS
-
 type Mailer struct {
-	client   *mail.Client
-	from     string
-	receiver string
+	client    *mail.Client
+	from      string
+	templates fs.FS
+}
+
+// Message represents a single mail
+type Message struct {
+	To          []string
+	FromName    string
+	ReplyTo     string
+	ReplyToName string
+	Template    string
+	Data        any
 }
 
 // tlsPolicies maps the accepted config values to go-mail's STARTTLS policies.
@@ -30,7 +37,8 @@ var tlsPolicies = map[string]mail.TLSPolicy{
 }
 var defaultTlsPolicy = mail.TLSMandatory
 
-func New(host string, port int, username, password, from, receiver string) (*Mailer, error) {
+// New creates a Mailer that renders mail templates from the given file system.
+func New(host string, port int, username, password, from string, templates fs.FS) (*Mailer, error) {
 	client, err := mail.NewClient(
 		host,
 		mail.WithTLSPolicy(defaultTlsPolicy),
@@ -48,14 +56,10 @@ func New(host string, port int, username, password, from, receiver string) (*Mai
 		return nil, errors.New("missing or invalid from address")
 	}
 
-	if receiver == "" || !ValidateAddress(receiver) {
-		return nil, errors.New("missing or invalid receiver")
-	}
-
 	mailer := &Mailer{
-		client:   client,
-		from:     from,
-		receiver: receiver,
+		client:    client,
+		from:      from,
+		templates: templates,
 	}
 
 	return mailer, nil
@@ -75,54 +79,57 @@ func (m *Mailer) SetTlsPolicy(p string) error {
 	return nil
 }
 
-// Send mails the rendered template to the receiver. The mail is sent from the
-// configured from address, as SMTP servers reject senders they don't own, and
-// the visitor goes into Reply-To.
-func (m *Mailer) Send(name, replyTo, templateFile string, data any) error {
-	msg, err := m.buildMsg(name, replyTo, templateFile, data)
+func (m *Mailer) Send(msg Message) error {
+	mm, err := m.buildMsg(msg)
 	if err != nil {
 		return err
 	}
 
-	return m.client.DialAndSend(msg)
+	return m.client.DialAndSend(mm)
 }
 
-func (m *Mailer) buildMsg(name, replyTo, templateFile string, data any) (*mail.Msg, error) {
-	textTmpl, err := tt.New("").ParseFS(templateFS, "templates/"+templateFile)
+func (m *Mailer) buildMsg(msg Message) (*mail.Msg, error) {
+	if len(msg.To) == 0 {
+		return nil, errors.New("missing receiver")
+	}
+
+	textTmpl, err := tt.New("").ParseFS(m.templates, msg.Template)
 	if err != nil {
 		return nil, err
 	}
 
 	subject := new(bytes.Buffer)
-	err = textTmpl.ExecuteTemplate(subject, "subject", data)
+	err = textTmpl.ExecuteTemplate(subject, "subject", msg.Data)
 	if err != nil {
 		return nil, err
 	}
 
 	plainBody := new(bytes.Buffer)
-	err = textTmpl.ExecuteTemplate(plainBody, "plainBody", data)
+	err = textTmpl.ExecuteTemplate(plainBody, "plainBody", msg.Data)
 	if err != nil {
 		return nil, err
 	}
 
-	msg := mail.NewMsg()
-	err = msg.FromFormat(name, m.from)
+	mm := mail.NewMsg()
+	err = mm.FromFormat(msg.FromName, m.from)
 	if err != nil {
 		return nil, err
 	}
-	err = msg.To(m.receiver)
+	err = mm.To(msg.To...)
 	if err != nil {
 		return nil, err
 	}
-	err = msg.ReplyToFormat(name, replyTo)
-	if err != nil {
-		return nil, err
+	if msg.ReplyTo != "" {
+		err = mm.ReplyToFormat(msg.ReplyToName, msg.ReplyTo)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	msg.Subject(subject.String())
-	msg.SetBodyString(mail.TypeTextPlain, plainBody.String())
+	mm.Subject(subject.String())
+	mm.SetBodyString(mail.TypeTextPlain, plainBody.String())
 
-	return msg, nil
+	return mm, nil
 }
 
 func ValidateAddress(e string) bool {

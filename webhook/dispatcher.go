@@ -12,11 +12,13 @@ import (
 	"net/url"
 	"slices"
 	"time"
+
+	"codeberg.org/hedge10/staticform/pipeline"
 )
 
 type metadata struct {
-	EventName   Event  `json:"event_name"`
-	WebhookName string `json:"webhook_name"`
+	EventName   pipeline.Event `json:"event_name"`
+	WebhookName string         `json:"webhook_name"`
 }
 
 type Dispatcher struct {
@@ -27,8 +29,7 @@ type Dispatcher struct {
 }
 
 // New returns a Dispatcher that sends each webhook request via run, which
-// must execute the function in the background. A nil transport uses
-// http.DefaultTransport.
+// must execute the function in the background.
 func New(webhooks []Webhook, logger *slog.Logger, run func(func()), transport http.RoundTripper) *Dispatcher {
 	return &Dispatcher{
 		webhooks: webhooks,
@@ -46,10 +47,9 @@ func New(webhooks []Webhook, logger *slog.Logger, run func(func()), transport ht
 	}
 }
 
-// Fire notifies every webhook registered for event. The body holds fields
-// in a "payload" member, next to a "metadata" member.
+// Fire notifies every webhook registered for event.
 // Fire does not wait for the requests, failures are only logged.
-func (d *Dispatcher) Fire(event Event, fields any) {
+func (d *Dispatcher) Fire(event pipeline.Event, fields any) {
 	for _, w := range d.webhooks {
 		if !slices.Contains(w.Events, event) {
 			continue
@@ -65,6 +65,12 @@ func (d *Dispatcher) Fire(event Event, fields any) {
 	}
 }
 
+func (d *Dispatcher) Hook() pipeline.Hook {
+	return func(event pipeline.Event, s pipeline.Submission, _ error) {
+		d.Fire(event, s.Fields)
+	}
+}
+
 func payload(fields any, meta metadata) ([]byte, error) {
 	body := struct {
 		Payload  any      `json:"payload"`
@@ -75,7 +81,7 @@ func payload(fields any, meta metadata) ([]byte, error) {
 	return json.Marshal(body, jsontext.AllowInvalidUTF8(true))
 }
 
-func (d *Dispatcher) send(w Webhook, event Event, body []byte) {
+func (d *Dispatcher) send(w Webhook, event pipeline.Event, body []byte) {
 	req, err := http.NewRequest(w.Method, w.URL, bytes.NewReader(body))
 	if err != nil {
 		d.fail(w, event, err)
@@ -98,7 +104,7 @@ func (d *Dispatcher) send(w Webhook, event Event, body []byte) {
 
 // fail logs a failed webhook. Webhook URLs often carry secrets in the
 // userinfo, path or query, so only the host is logged.
-func (d *Dispatcher) fail(w Webhook, event Event, err error) {
+func (d *Dispatcher) fail(w Webhook, event pipeline.Event, err error) {
 	if urlErr, ok := errors.AsType[*url.Error](err); ok {
 		err = urlErr.Err
 	}

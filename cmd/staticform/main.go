@@ -25,7 +25,6 @@ type config struct {
 		Username string `env:"USERNAME"`
 		Password string `env:"PASSWORD"`
 		From     string `env:"FROM,required"`
-		Receiver string `env:"RECEIVER,required"`
 		Tls      string `env:"TLS" envDefault:"mandatory"`
 	} `envPrefix:"SMTP_"`
 	// captcha
@@ -46,7 +45,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	mailer, err := mailer.New(cfg.Smtp.Host, cfg.Smtp.Port, cfg.Smtp.Username, cfg.Smtp.Password, cfg.Smtp.From, cfg.Smtp.Receiver)
+	mailer, err := mailer.New(cfg.Smtp.Host, cfg.Smtp.Port, cfg.Smtp.Username, cfg.Smtp.Password, cfg.Smtp.From, server.MailTemplates)
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)

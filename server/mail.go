@@ -1,14 +1,23 @@
 package server
 
 import (
+	"embed"
+	"io/fs"
 	"net/http"
 	"regexp"
 
-	"codeberg.org/hedge10/staticform/webhook"
+	"codeberg.org/hedge10/staticform/mailer"
+	"codeberg.org/hedge10/staticform/pipeline"
 
 	validation "github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/go-ozzo/ozzo-validation/v4/is"
 )
+
+//go:embed templates
+var templateFiles embed.FS
+
+// MailTemplates holds the templates for the mails staticform sends.
+var MailTemplates, _ = fs.Sub(templateFiles, "templates")
 
 type messageInput struct {
 	Name string `json:"name"`
@@ -39,20 +48,16 @@ func (app *Server) sendMail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	app.webhooks.Fire(webhook.Before, message)
-
-	app.background(func() {
-		err := app.mailer.Send(message.Name, message.Sender, "new_mail.tmpl", message)
-		if err != nil {
-			// The response was already sent, so the error can only be logged.
-			app.logger.Error("failed to send mail", "sender", message.Sender, "error", err.Error())
-			app.webhooks.Fire(webhook.Error, message)
-		} else {
-			app.logger.Info("processed new mail", "sender", message.Sender)
-			app.webhooks.Fire(webhook.Success, message)
-		}
-
-		app.webhooks.Fire(webhook.After, message)
+	app.pipeline.Deliver(pipeline.Submission{
+		Message: mailer.Message{
+			To:          []string{app.config.Receiver},
+			FromName:    message.Name,
+			ReplyTo:     message.Sender,
+			ReplyToName: message.Name,
+			Template:    "new_mail.tmpl",
+			Data:        message,
+		},
+		Fields: message,
 	})
 
 	app.sentResponse(w, r, message.Sender, redirect)

@@ -12,7 +12,7 @@ build:
 ## run: run the cmd/staticform application
 .PHONY: run
 run:
-	SF_ENV=dev SF_SMTP_HOST=localhost SF_SMTP_PORT=1025 SF_SMTP_TLS=none SF_SMTP_RECEIVER=john@example.com \
+	SF_ENV=dev SF_SMTP_HOST=localhost SF_SMTP_PORT=1025 SF_SMTP_TLS=none SF_SMTP_RECEIVER=john@example.com SF_SMTP_FROM=forms@example.com \
 		go run ./cmd/staticform
 
 ## dispatch-msg: send a test message to the local API

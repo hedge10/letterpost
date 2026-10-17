@@ -13,6 +13,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"codeberg.org/hedge10/staticform/pipeline"
 )
 
 type message struct {
@@ -56,9 +58,9 @@ func discardLogger() *slog.Logger {
 func TestFireSendsFieldsAndMetadata(t *testing.T) {
 	rec, srv := newRecorder(t, http.StatusOK)
 	var wg sync.WaitGroup
-	d := New([]Webhook{{Name: "crm", URL: srv.URL, Method: http.MethodPut, Events: []Event{Success}}}, discardLogger(), wg.Go, nil)
+	d := New([]Webhook{{Name: "crm", URL: srv.URL, Method: http.MethodPut, Events: []pipeline.Event{pipeline.Success}}}, discardLogger(), wg.Go, nil)
 
-	d.Fire(Success, message{Name: `Jürgen "JJ" Doe`, PlainBody: "Line one\nLine two"})
+	d.Fire(pipeline.Success, message{Name: `Jürgen "JJ" Doe`, PlainBody: "Line one\nLine two"})
 	wg.Wait()
 
 	if len(rec.requests) != 1 {
@@ -90,12 +92,12 @@ func TestFireOnlyMatchingWebhooks(t *testing.T) {
 	rec, srv := newRecorder(t, http.StatusOK)
 	var wg sync.WaitGroup
 	d := New([]Webhook{
-		{Name: "on-success", URL: srv.URL, Method: http.MethodPost, Events: []Event{Success}},
-		{Name: "on-error", URL: srv.URL, Method: http.MethodPost, Events: []Event{Error}},
-		{Name: "duplicate-event", URL: srv.URL, Method: http.MethodPost, Events: []Event{Success, Success}},
+		{Name: "on-success", URL: srv.URL, Method: http.MethodPost, Events: []pipeline.Event{pipeline.Success}},
+		{Name: "on-error", URL: srv.URL, Method: http.MethodPost, Events: []pipeline.Event{pipeline.Error}},
+		{Name: "duplicate-event", URL: srv.URL, Method: http.MethodPost, Events: []pipeline.Event{pipeline.Success, pipeline.Success}},
 	}, discardLogger(), wg.Go, nil)
 
-	d.Fire(Success, message{Name: "Jane Doe"})
+	d.Fire(pipeline.Success, message{Name: "Jane Doe"})
 	wg.Wait()
 
 	var names []string
@@ -106,6 +108,28 @@ func TestFireOnlyMatchingWebhooks(t *testing.T) {
 	want := []string{"duplicate-event", "on-success"}
 	if !slices.Equal(names, want) {
 		t.Errorf("called %v, want %v", names, want)
+	}
+}
+
+func TestHookFiresMatchingWebhooks(t *testing.T) {
+	rec, srv := newRecorder(t, http.StatusOK)
+	var wg sync.WaitGroup
+	d := New([]Webhook{{Name: "crm", URL: srv.URL, Method: http.MethodPost, Events: []pipeline.Event{pipeline.Success}}}, discardLogger(), wg.Go, nil)
+	hook := d.Hook()
+
+	hook(pipeline.Before, pipeline.Submission{Fields: message{Name: "Jane Doe"}}, nil)
+	hook(pipeline.Success, pipeline.Submission{Fields: message{Name: "Jane Doe"}}, nil)
+	wg.Wait()
+
+	if len(rec.requests) != 1 {
+		t.Fatalf("expected 1 request, got %d", len(rec.requests))
+	}
+	got := rec.requests[0].Body
+	if name := got["payload"].(map[string]any)["name"]; name != "Jane Doe" {
+		t.Errorf("payload name = %v, want Jane Doe", name)
+	}
+	if event := got["metadata"].(map[string]any)["event_name"]; event != "success" {
+		t.Errorf("event_name = %v, want success", event)
 	}
 }
 
@@ -126,9 +150,9 @@ func TestFireLogsFailures(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			var wg sync.WaitGroup
-			d := New([]Webhook{{Name: "crm", URL: tt.url, Method: http.MethodPost, Events: []Event{Error}}}, slog.New(slog.NewTextHandler(&buf, nil)), wg.Go, nil)
+			d := New([]Webhook{{Name: "crm", URL: tt.url, Method: http.MethodPost, Events: []pipeline.Event{pipeline.Error}}}, slog.New(slog.NewTextHandler(&buf, nil)), wg.Go, nil)
 
-			d.Fire(Error, message{Name: "Jane Doe"})
+			d.Fire(pipeline.Error, message{Name: "Jane Doe"})
 			wg.Wait()
 
 			out := buf.String()
@@ -145,10 +169,10 @@ func TestFireDoesNotWaitForSlowReceiver(t *testing.T) {
 		<-release
 	}))
 	var wg sync.WaitGroup
-	d := New([]Webhook{{Name: "slow", URL: srv.URL, Method: http.MethodPost, Events: []Event{Before}}}, discardLogger(), wg.Go, nil)
+	d := New([]Webhook{{Name: "slow", URL: srv.URL, Method: http.MethodPost, Events: []pipeline.Event{pipeline.Before}}}, discardLogger(), wg.Go, nil)
 
 	start := time.Now()
-	d.Fire(Before, message{Name: "Jane Doe"})
+	d.Fire(pipeline.Before, message{Name: "Jane Doe"})
 	elapsed := time.Since(start)
 
 	close(release)
@@ -163,10 +187,10 @@ func TestFireDoesNotWaitForSlowReceiver(t *testing.T) {
 func TestFireReplacesInvalidUTF8(t *testing.T) {
 	rec, srv := newRecorder(t, http.StatusOK)
 	var wg sync.WaitGroup
-	d := New([]Webhook{{Name: "crm", URL: srv.URL, Method: http.MethodPost, Events: []Event{Success}}}, discardLogger(), wg.Go, nil)
+	d := New([]Webhook{{Name: "crm", URL: srv.URL, Method: http.MethodPost, Events: []pipeline.Event{pipeline.Success}}}, discardLogger(), wg.Go, nil)
 
 	// "Jürgen" encoded as ISO-8859-1, as sent by a legacy form.
-	d.Fire(Success, message{Name: "J\xfcrgen"})
+	d.Fire(pipeline.Success, message{Name: "J\xfcrgen"})
 	wg.Wait()
 
 	if len(rec.requests) != 1 {
@@ -195,9 +219,9 @@ func TestFireDoesNotFollowRedirects(t *testing.T) {
 
 	var buf bytes.Buffer
 	var wg sync.WaitGroup
-	d := New([]Webhook{{Name: "crm", URL: srv.URL + "/hook", Method: http.MethodPost, Events: []Event{Success}}}, slog.New(slog.NewTextHandler(&buf, nil)), wg.Go, nil)
+	d := New([]Webhook{{Name: "crm", URL: srv.URL + "/hook", Method: http.MethodPost, Events: []pipeline.Event{pipeline.Success}}}, slog.New(slog.NewTextHandler(&buf, nil)), wg.Go, nil)
 
-	d.Fire(Success, message{Name: "Jane Doe"})
+	d.Fire(pipeline.Success, message{Name: "Jane Doe"})
 	wg.Wait()
 
 	if redirect {
@@ -226,9 +250,9 @@ func TestFireDoesNotLogURLSecrets(t *testing.T) {
 			var buf bytes.Buffer
 			var wg sync.WaitGroup
 			url := "http://user:pass-secret@" + tt.host + "/services/path-secret?token=query-secret"
-			d := New([]Webhook{{Name: "crm", URL: url, Method: http.MethodPost, Events: []Event{Error}}}, slog.New(slog.NewTextHandler(&buf, nil)), wg.Go, nil)
+			d := New([]Webhook{{Name: "crm", URL: url, Method: http.MethodPost, Events: []pipeline.Event{pipeline.Error}}}, slog.New(slog.NewTextHandler(&buf, nil)), wg.Go, nil)
 
-			d.Fire(Error, message{Name: "Jane Doe"})
+			d.Fire(pipeline.Error, message{Name: "Jane Doe"})
 			wg.Wait()
 
 			out := buf.String()

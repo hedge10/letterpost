@@ -8,31 +8,17 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
+
+	"codeberg.org/hedge10/staticform/pipeline"
 )
-
-type Event string
-
-const (
-	Before  Event = "before"
-	After   Event = "after"
-	Error   Event = "error"
-	Success Event = "success"
-)
-
-func (e Event) valid() bool {
-	switch e {
-	case Before, After, Error, Success:
-		return true
-	}
-	return false
-}
 
 type Webhook struct {
-	Name   string  `json:"name"`
-	URL    string  `json:"url"`
-	Method string  `json:"method"`
-	Events []Event `json:"events"`
+	Name   string           `json:"name"`
+	URL    string           `json:"url"`
+	Method string           `json:"method"`
+	Events []pipeline.Event `json:"events"`
 }
 
 func Load(path string) ([]Webhook, error) {
@@ -82,7 +68,7 @@ func (w *Webhook) validate() error {
 		return errors.New("events must not be empty")
 	}
 	for _, e := range w.Events {
-		if !e.valid() {
+		if !slices.Contains(pipeline.Events(), e) {
 			return fmt.Errorf("unknown event %q", e)
 		}
 	}

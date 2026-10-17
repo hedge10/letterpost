@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"codeberg.org/hedge10/staticform/pipeline"
 )
 
 func writeFile(t *testing.T, content string) string {
@@ -34,7 +36,7 @@ func TestLoad(t *testing.T) {
 		Name:   "crm",
 		URL:    "https://crm.example.com/hook",
 		Method: "POST",
-		Events: []Event{Success, Error},
+		Events: []pipeline.Event{pipeline.Success, pipeline.Error},
 	}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %+v, want %+v", got, want)
