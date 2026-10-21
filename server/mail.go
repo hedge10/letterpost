@@ -2,12 +2,14 @@ package server
 
 import (
 	"embed"
+	"errors"
 	"io/fs"
 	"net/http"
 	"regexp"
 
 	"codeberg.org/hedge10/staticform/mailer"
 	"codeberg.org/hedge10/staticform/pipeline"
+	"codeberg.org/hedge10/staticform/redirect"
 
 	validation "github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/go-ozzo/ozzo-validation/v4/is"
@@ -42,9 +44,10 @@ func (app *Server) sendMail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirect, err := app.redirectTarget(r.PostFormValue("_redirect"))
-	if err != nil {
-		app.failedValidationResponse(w, r, validation.Errors{"_redirect": err})
+	target, ok := redirect.Target(app.config.RedirectURL, r.PostFormValue("_redirect"))
+	if !ok {
+		app.logger.Warn("_redirect was sent but SF_REDIRECT_URL is not set")
+		app.failedValidationResponse(w, r, validation.Errors{"_redirect": errors.New("redirects are not enabled")})
 		return
 	}
 
@@ -60,7 +63,7 @@ func (app *Server) sendMail(w http.ResponseWriter, r *http.Request) {
 		Fields: message,
 	})
 
-	app.sentResponse(w, r, message.Sender, redirect)
+	app.sentResponse(w, r, message.Sender, target)
 }
 
 func (m messageInput) Validate() error {

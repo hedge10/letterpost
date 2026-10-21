@@ -45,3 +45,15 @@ func (app *Server) writeJSON(w http.ResponseWriter, status int, data envelope, h
 
 	return nil
 }
+
+func (app *Server) sentResponse(w http.ResponseWriter, r *http.Request, sender, target string) {
+	if target != "" {
+		http.Redirect(w, r, target, http.StatusSeeOther)
+		return
+	}
+
+	err := app.writeJSON(w, http.StatusOK, envelope{"email_status": "sent", "email_sender": sender}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}

@@ -4,97 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sync"
-	"time"
 
 	"github.com/tomasen/realip"
-	"golang.org/x/time/rate"
 
 	ic "codeberg.org/hedge10/staticform/captcha"
+	"codeberg.org/hedge10/staticform/redirect"
 )
-
-func (app *Server) enableCORS(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Add("Vary", "Origin")
-		w.Header().Add("Vary", "Access-Control-Request-Method")
-
-		origin := r.Header.Get("Origin")
-
-		if origin != "" {
-			for i := range app.config.TrustedOrigins {
-				if origin == app.config.TrustedOrigins[i] {
-					w.Header().Set("Access-Control-Allow-Origin", origin)
-
-					if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
-						w.Header().Set("Access-Control-Allow-Methods", "OPTIONS, PUT, PATCH, DELETE")
-						w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-
-						w.WriteHeader(http.StatusOK)
-						return
-					}
-
-					break
-				}
-			}
-		}
-
-		next.ServeHTTP(w, r)
-	})
-}
-
-func (app *Server) rateLimit(next http.Handler) http.Handler {
-	if !app.config.Limiter.Enabled {
-		return next
-	}
-
-	type client struct {
-		limiter  *rate.Limiter
-		lastSeen time.Time
-	}
-
-	var (
-		mu      sync.Mutex
-		clients = make(map[string]*client)
-	)
-
-	go func() {
-		for {
-			time.Sleep(time.Minute)
-			mu.Lock()
-
-			for ip, client := range clients {
-				if time.Since(client.lastSeen) > 3*time.Minute {
-					delete(clients, ip)
-				}
-			}
-
-			mu.Unlock()
-		}
-	}()
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := realip.FromRequest(r)
-		mu.Lock()
-
-		if _, found := clients[ip]; !found {
-			clients[ip] = &client{
-				limiter: rate.NewLimiter(rate.Limit(app.config.Limiter.RPS), app.config.Limiter.Burst),
-			}
-		}
-
-		clients[ip].lastSeen = time.Now()
-
-		if !clients[ip].limiter.Allow() {
-			mu.Unlock()
-			app.rateLimitExceededResponse(w, r)
-			return
-		}
-
-		mu.Unlock()
-
-		next.ServeHTTP(w, r)
-	})
-}
 
 func (app *Server) captcha(next http.Handler) http.Handler {
 	if app.captchaVerifier == nil {
@@ -136,8 +51,8 @@ func (app *Server) honeypot(next http.Handler) http.Handler {
 
 		// Pretend the mail was sent, so bots get no signal that they were caught.
 		app.logger.Info("honeypot triggered, mail discarded", "ip", realip.FromRequest(r))
-		redirect, _ := app.redirectTarget(r.PostFormValue("_redirect"))
-		app.sentResponse(w, r, r.PostFormValue("sender"), redirect)
+		target, _ := redirect.Target(app.config.RedirectURL, r.PostFormValue("_redirect"))
+		app.sentResponse(w, r, r.PostFormValue("sender"), target)
 	})
 }
 

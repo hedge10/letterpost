@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/julienschmidt/httprouter"
+
+	"codeberg.org/hedge10/staticform/middleware"
 )
 
 func (app *Server) routes() http.Handler {
@@ -15,5 +17,6 @@ func (app *Server) routes() http.Handler {
 	router.HandlerFunc(http.MethodGet, "/health", app.healthcheckHandler)
 	router.Handler(http.MethodPost, "/v1/send", app.honeypot(app.captcha(http.HandlerFunc(app.sendMail))))
 
-	return app.recoverPanic(app.enableCORS(app.rateLimit(router)))
+	limited := middleware.RateLimit(app.config.Limiter, router, app.rateLimitExceededResponse)
+	return app.recoverPanic(middleware.CORS(app.config.TrustedOrigins, limited))
 }

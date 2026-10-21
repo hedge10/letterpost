@@ -54,3 +54,23 @@ func TestHoneypot(t *testing.T) {
 		})
 	}
 }
+
+func TestHoneypotRedirects(t *testing.T) {
+	app := &Server{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	app.config.HoneypotField = "website"
+	app.config.RedirectURL = "https://example.com/thanks"
+
+	form := url.Values{"website": {"spam"}}
+	r := httptest.NewRequest(http.MethodPost, "/v1/send", strings.NewReader(form.Encode()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+
+	app.honeypot(http.NotFoundHandler()).ServeHTTP(w, r)
+
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusSeeOther)
+	}
+	if loc := w.Header().Get("Location"); loc != "https://example.com/thanks" {
+		t.Errorf("Location = %q, want %q", loc, "https://example.com/thanks")
+	}
+}

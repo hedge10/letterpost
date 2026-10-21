@@ -14,20 +14,18 @@ import (
 
 	"codeberg.org/hedge10/staticform/captcha"
 	"codeberg.org/hedge10/staticform/mailer"
+	"codeberg.org/hedge10/staticform/middleware"
 	"codeberg.org/hedge10/staticform/pipeline"
+	"codeberg.org/hedge10/staticform/redirect"
 	"codeberg.org/hedge10/staticform/webhook"
 )
 
 // Config holds the settings of a Server.
 type Config struct {
-	Port    int    `env:"PORT" envDefault:"4000"`
-	Env     string `env:"ENV" envDefault:"prod"`
-	Limiter struct {
-		RPS     float64 `env:"RPS" envDefault:"2"`
-		Burst   int     `env:"BURST" envDefault:"4"`
-		Enabled bool    `env:"ENABLED" envDefault:"true"`
-	} `envPrefix:"LIMITER_"`
-	TrustedOrigins []string `env:"CORS_TRUSTED_ORIGINS" envSeparator:" "`
+	Port           int                        `env:"PORT" envDefault:"4000"`
+	Env            string                     `env:"ENV" envDefault:"prod"`
+	Limiter        middleware.RateLimitConfig `envPrefix:"LIMITER_"`
+	TrustedOrigins []string                   `env:"CORS_TRUSTED_ORIGINS" envSeparator:" "`
 	// Receiver gets the form submissions.
 	Receiver      string `env:"SMTP_RECEIVER,required"`
 	HoneypotField string `env:"HONEYPOT_FIELD"`
@@ -53,7 +51,7 @@ func New(cfg Config, logger *slog.Logger, m Mailer, captchaVerifier captcha.Veri
 	}
 
 	if cfg.RedirectURL != "" {
-		if _, ok := originOf(cfg.RedirectURL); !ok {
+		if _, ok := redirect.Origin(cfg.RedirectURL); !ok {
 			return nil, errors.New("redirect URL must be an absolute http(s) URL")
 		}
 	}

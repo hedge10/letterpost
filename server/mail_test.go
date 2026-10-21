@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json/v2"
 	"errors"
 	"io"
@@ -243,5 +244,36 @@ func TestSendMailMessage(t *testing.T) {
 func TestMailTemplates(t *testing.T) {
 	if _, err := fs.Stat(MailTemplates, "new_mail.tmpl"); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestSendMailRejectsRedirectWithoutRedirectURL(t *testing.T) {
+	logs := new(bytes.Buffer)
+	app := &Server{logger: slog.New(slog.NewTextHandler(logs, nil))}
+
+	form := url.Values{
+		"name":       {"Jane Doe"},
+		"sender":     {"jane.doe@gmail.com"},
+		"plain_body": {"Hi"},
+		"_redirect":  {"/thanks"},
+	}
+	r := httptest.NewRequest(http.MethodPost, "/v1/send", strings.NewReader(form.Encode()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+
+	app.sendMail(w, r)
+	app.wg.Wait()
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusUnprocessableEntity)
+	}
+	if !strings.Contains(w.Body.String(), "_redirect") {
+		t.Errorf("expected an error for _redirect, body: %s", w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "SF_REDIRECT_URL") {
+		t.Errorf("body names the env var: %s", w.Body.String())
+	}
+	if !strings.Contains(logs.String(), "SF_REDIRECT_URL") {
+		t.Errorf("log does not name the env var: %s", logs.String())
 	}
 }
