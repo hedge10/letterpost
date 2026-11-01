@@ -12,13 +12,17 @@ type friendlyCaptcha struct {
 	client *frc.Client
 }
 
-func newFriendlyCaptcha(apiKey, sitekey string) (*friendlyCaptcha, error) {
+func newFriendlyCaptcha(apiKey, sitekey, endpoint string) (*friendlyCaptcha, error) {
 	opts := []frc.ClientOption{
 		frc.WithAPIKey(apiKey),
 		frc.WithStrictMode(true),
 	}
 	if sitekey != "" {
 		opts = append(opts, frc.WithSitekey(sitekey))
+	}
+
+	if endpoint == "eu" {
+		opts = append(opts, frc.WithAPIEndpoint("eu"))
 	}
 
 	client, err := frc.NewClient(opts...)

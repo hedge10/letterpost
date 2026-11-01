@@ -19,7 +19,7 @@ func (app *Server) captcha(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := r.PostFormValue(app.captchaVerifier.FormField())
 		if token == "" {
-			app.captchaFailedResponse(w, r)
+			app.captchaMissingResponse(w, r)
 			return
 		}
 
@@ -30,7 +30,9 @@ func (app *Server) captcha(next http.Handler) http.Handler {
 				return
 			}
 
-			app.serverErrorResponse(w, r, err)
+			app.logError(r, err)
+			message := "the server encountered a problem and could not process your request"
+			app.formErrorResponse(w, r, http.StatusInternalServerError, "captcha_unavailable", message)
 			return
 		}
 

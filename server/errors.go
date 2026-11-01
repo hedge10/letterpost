@@ -3,6 +3,8 @@ package server
 import (
 	"fmt"
 	"net/http"
+
+	"codeberg.org/hedge10/staticform/redirect"
 )
 
 func (app *Server) logError(r *http.Request, err error) {
@@ -25,25 +27,46 @@ func (app *Server) errorResponse(w http.ResponseWriter, r *http.Request, status 
 	}
 }
 
+// formErrorResponse answers a failed form submission. With SF_REDIRECT_URL set
+// the visitor is redirected with error=code in the query, otherwise the error
+// is sent as JSON.
+func (app *Server) formErrorResponse(w http.ResponseWriter, r *http.Request, status int, code string, message any) {
+	target, ok := redirect.ErrorTarget(app.config.RedirectURL, r.PostFormValue("_redirect_error"), code)
+	if target != "" {
+		http.Redirect(w, r, target, http.StatusSeeOther)
+		return
+	}
+	if !ok && app.config.RedirectURL == "" && r.PostFormValue("_redirect_error") != "" {
+		app.logger.Warn("_redirect_error was sent but SF_REDIRECT_URL is not set")
+	}
+
+	app.errorResponse(w, r, status, message)
+}
+
 func (app *Server) serverErrorResponse(w http.ResponseWriter, r *http.Request, err error) {
 	app.logError(r, err)
 	message :=
 		"the server encountered a problem and could not process your request"
-	app.errorResponse(w, r, http.StatusInternalServerError, message)
+	app.formErrorResponse(w, r, http.StatusInternalServerError, "server_error", message)
 }
 
 func (app *Server) failedValidationResponse(w http.ResponseWriter, r *http.Request, err error) {
-	app.errorResponse(w, r, http.StatusUnprocessableEntity, err)
+	app.formErrorResponse(w, r, http.StatusUnprocessableEntity, "invalid", err)
 }
 
 func (app *Server) rateLimitExceededResponse(w http.ResponseWriter, r *http.Request) {
 	message := "rate limit exceeded"
-	app.errorResponse(w, r, http.StatusTooManyRequests, message)
+	app.formErrorResponse(w, r, http.StatusTooManyRequests, "rate_limited", message)
+}
+
+func (app *Server) captchaMissingResponse(w http.ResponseWriter, r *http.Request) {
+	message := "captcha verification failed"
+	app.formErrorResponse(w, r, http.StatusForbidden, "captcha_missing", message)
 }
 
 func (app *Server) captchaFailedResponse(w http.ResponseWriter, r *http.Request) {
 	message := "captcha verification failed"
-	app.errorResponse(w, r, http.StatusForbidden, message)
+	app.formErrorResponse(w, r, http.StatusForbidden, "captcha_failed", message)
 }
 
 func (app *Server) notFoundResponse(w http.ResponseWriter, r *http.Request) {

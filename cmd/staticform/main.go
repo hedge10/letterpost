@@ -32,6 +32,7 @@ type config struct {
 		Provider string `env:"PROVIDER"`
 		Secret   string `env:"SECRET"`
 		Sitekey  string `env:"SITEKEY"`
+		Endpoint string `env:"ENDPOINT" envDefault:"global"`
 		Enabled  bool   `env:"ENABLED" envDefault:"false"`
 	} `envPrefix:"CAPTCHA_"`
 }
@@ -58,7 +59,7 @@ func main() {
 
 	var captchaVerifier captcha.Verifier
 	if cfg.Captcha.Enabled {
-		captchaVerifier, err = captcha.New(captcha.Provider(cfg.Captcha.Provider), cfg.Captcha.Secret, cfg.Captcha.Sitekey)
+		captchaVerifier, err = captcha.New(captcha.Provider(cfg.Captcha.Provider), cfg.Captcha.Secret, cfg.Captcha.Sitekey, cfg.Captcha.Endpoint)
 		if err != nil {
 			logger.Error(err.Error())
 			os.Exit(1)

@@ -36,6 +36,46 @@ func TestTarget(t *testing.T) {
 	}
 }
 
+func TestErrorTarget(t *testing.T) {
+	tests := []struct {
+		name   string
+		base   string
+		path   string
+		code   string
+		want   string
+		wantOK bool
+	}{
+		{name: "nothing configured, no path", want: "", wantOK: true},
+		{name: "base only", base: "https://example.com/thanks", want: "https://example.com/thanks?error=invalid", wantOK: true},
+		{name: "path on base origin", base: "https://example.com/thanks", path: "/oops", want: "https://example.com/oops?error=invalid", wantOK: true},
+		{name: "query and fragment are kept", base: "https://example.com/", path: "/oops?lang=de#form", want: "https://example.com/oops?error=invalid&lang=de#form", wantOK: true},
+		{name: "old error is replaced", base: "https://example.com/thanks?error=x", want: "https://example.com/thanks?error=invalid", wantOK: true},
+		{name: "full url stays on origin", base: "https://example.com/", path: "https://evil.com/", want: "https://example.com/https://evil.com/?error=invalid", wantOK: true},
+		{name: "unparsable path falls back to base", base: "https://example.com/thanks", path: "/x%zz", want: "https://example.com/thanks?error=invalid", wantOK: true},
+		{name: "control character path falls back to base", base: "https://example.com/thanks", path: "/a\x7f", want: "https://example.com/thanks?error=invalid", wantOK: true},
+		{name: "path without base", path: "/oops", wantOK: false},
+		{name: "code is escaped", base: "https://example.com/", code: "a b&c", want: "https://example.com/?error=a+b%26c", wantOK: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			code := tt.code
+			if code == "" {
+				code = "invalid"
+			}
+
+			got, ok := ErrorTarget(tt.base, tt.path, code)
+
+			if ok != tt.wantOK {
+				t.Fatalf("ok = %v, want %v (target %q)", ok, tt.wantOK, got)
+			}
+			if got != tt.want {
+				t.Errorf("target = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestOrigin(t *testing.T) {
 	tests := []struct {
 		rawURL string

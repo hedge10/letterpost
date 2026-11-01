@@ -9,6 +9,7 @@ func TestNew(t *testing.T) {
 		name     string
 		provider Provider
 		secret   string
+		endpoint string
 		wantErr  bool
 	}{
 		{name: "unknown provider", provider: "recaptcha", secret: "secret", wantErr: true},
@@ -16,11 +17,16 @@ func TestNew(t *testing.T) {
 		{name: "empty secret with turnstile", provider: ProviderTurnstile, secret: "", wantErr: true},
 		{name: "empty secret with friendly captcha", provider: ProviderFriendlyCaptcha, secret: "", wantErr: true},
 		{name: "valid turnstile", provider: ProviderTurnstile, secret: "secret"},
+		{name: "friendly captcha with eu endpoint", provider: ProviderFriendlyCaptcha, secret: "secret", endpoint: "eu"},
+		{name: "friendly captcha with global endpoint", provider: ProviderFriendlyCaptcha, secret: "secret", endpoint: "global"},
+		{name: "turnstile ignores endpoint", provider: ProviderTurnstile, secret: "secret", endpoint: "eu"},
+		{name: "invalid endpoint with turnstile", provider: ProviderTurnstile, secret: "secret", endpoint: "mars", wantErr: true},
+		{name: "invalid endpoint with friendly captcha", provider: ProviderFriendlyCaptcha, secret: "secret", endpoint: "mars", wantErr: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v, err := New(tt.provider, tt.secret, "")
+			v, err := New(tt.provider, tt.secret, "", tt.endpoint)
 
 			if !tt.wantErr {
 				if err != nil {

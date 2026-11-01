@@ -63,6 +63,7 @@ The configuration can be done entirely via environment variables
 | `SF_CAPTCHA_PROVIDER`     | _none_                     | Captcha provider: `cloudflare` or `friendly-captcha`                                          |
 | `SF_CAPTCHA_SECRET`       | _none_                     | Secret / API key of the captcha provider, required when captcha is enabled                    |
 | `SF_CAPTCHA_SITEKEY`      | _none_                     | Sitekey, only used by Friendly Captcha (optional)                                             |
+| `SF_CAPTCHA_ENDPOINT`     | `global`                   | Friendly Captcha server: `global` or `eu`, ignored by Cloudflare                              |
 | `SF_HONEYPOT_FIELD`       | _none_                     | Name of the honeypot form field. If set and the field is filled, the mail is silently dropped |
 | `SF_REDIRECT_URL`         | _none_                     | Success page visitors are redirected to after submitting. If unset, a JSON response is sent   |
 
@@ -82,6 +83,32 @@ With `SF_REDIRECT_URL=https://example.com` this redirects to `https://example.co
 A leading `/` is optional. Sending `_redirect` while `SF_REDIRECT_URL` is unset is rejected with `422`.
 
 Note: when `SF_REDIRECT_URL` is set, every submission is redirected, including those from Javascript clients.
+
+#### Redirect on errors
+
+With `SF_REDIRECT_URL` set, failed submissions are redirected too, with the reason in an `error` query
+parameter. A form can choose the error page with a `_redirect_error` field, used as a path on the origin
+of `SF_REDIRECT_URL` like `_redirect`:
+
+```html
+<input type="hidden" name="_redirect_error" value="/oops">
+```
+
+Without `_redirect_error`, errors go to `SF_REDIRECT_URL` itself, so the thank-you page should handle
+`?error=`. The codes are:
+
+| Code                  | Meaning                                |
+|-----------------------|----------------------------------------|
+| `invalid`             | The submitted fields failed validation |
+| `rate_limited`        | Too many requests                      |
+| `captcha_missing`     | The captcha token is missing           |
+| `captcha_failed`      | The captcha token was rejected         |
+| `captcha_unavailable` | The captcha could not be checked       |
+| `server_error`        | StaticForm hit an internal problem     |
+
+Without `SF_REDIRECT_URL`, errors are sent as JSON. Not-found and method-not-allowed answers are never redirected. Rate limiting and crash recovery wrap all routes, so they do redirect when `SF_REDIRECT_URL` is set.
+
+For JavaScript clients, `fetch` follows the `303` when `SF_REDIRECT_URL` is set, so check `response.url` for `error=` to detect a failed submission.
 
 #### Webhooks
 

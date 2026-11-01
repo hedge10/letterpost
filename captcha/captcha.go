@@ -28,16 +28,22 @@ type Verifier interface {
 	Verify(ctx context.Context, token, remoteIP string) error
 }
 
-func New(provider Provider, secret, sitekey string) (Verifier, error) {
+// New creates the Verifier for provider. endpoint is "", "global" or "eu"
+// and only selects the Friendly Captcha server; Turnstile ignores it.
+func New(provider Provider, secret, sitekey, endpoint string) (Verifier, error) {
 	if secret == "" {
 		return nil, errors.New("captcha secret is required")
+	}
+
+	if endpoint != "" && endpoint != "global" && endpoint != "eu" {
+		return nil, fmt.Errorf("invalid captcha endpoint %q (global|eu)", endpoint)
 	}
 
 	switch provider {
 	case ProviderTurnstile:
 		return newTurnstile(secret), nil
 	case ProviderFriendlyCaptcha:
-		v, err := newFriendlyCaptcha(secret, sitekey)
+		v, err := newFriendlyCaptcha(secret, sitekey, endpoint)
 		if err != nil {
 			return nil, err
 		}
